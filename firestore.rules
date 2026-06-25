@@ -1,0 +1,30 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // 你的第一個集合：任何人可讀寫
+    // 之後新增工具時在這裡加更多 match 區塊
+    match /wordcloud_words/{document} {
+      // 測試用公開白名單：只適合課堂 demo，不可直接用在正式學生資料或長期公開服務。
+      allow read, write: if true;
+    }
+
+    // 個案送出的問卷：任何人可建立或以同編號覆蓋（讓個案能用舊編號回來修改）；憑 caseId 可直接 get；不開放批次列出。
+    match /patient_submissions/{caseId} {
+      allow create, update: if true;
+      allow get: if true;
+      allow list, delete: if false;
+    }
+
+    // 個管師端的評估資料：同樣用 caseId 當通行證；不開放批次列出。
+    match /manager_assessments/{caseId} {
+      allow create, update, get: if true;
+      allow list, delete: if false;
+    }
+
+    // 其他集合預設禁止存取
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

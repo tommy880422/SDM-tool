@@ -1,0 +1,42 @@
+# ── 相依套件（很大，且可以用 npm install 重新下載） ──
+node_modules/
+
+# ── Vite 編譯產物（部署前才會用 npm run build 重新產生） ──
+dist/
+dist-ssr/
+*.local
+
+# ── 環境變數／密鑰（若日後有用 .env，避免外流） ──
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# ── Firebase 暫存與紀錄 ──
+.firebase/
+firebase-debug.log
+firestore-debug.log
+ui-debug.log
+*.log
+
+# ── 編輯器／作業系統暫存 ──
+.vscode/
+.idea/
+*.swp
+*.swo
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+.DS_Store
+
+# ── npm／yarn／pnpm ──
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# ── 其他 ──
+coverage/
+.cache/
