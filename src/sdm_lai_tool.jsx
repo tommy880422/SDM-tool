@@ -53,10 +53,10 @@ const CDC_ITEMS = [
   { key: "ck_oral", label: "每日口服藥物有困難（已敘明理由）" },
   { key: "ck_q2m", label: "同意配合每 2 個月回診注射" },
   { key: "ck_hbv", label: "未感染 B 型肝炎病毒" },
-  { key: "ck_resist", label: "無病毒抑制失敗史，對 CAB／RPV 無已知或疑似抗藥性" },
+  { key: "ck_resist", label: "過去無病毒抑制失敗、未對 CAB 或 RPV 具有已知或疑似抗藥性" },
   { key: "ck_drug", label: "未使用與 CAB／RPV 有明顯交互作用之藥物" },
-  { key: "ck_preg", label: "未懷孕、無備孕計畫" },
-  { key: "ck_ltbi", label: "LTBI 檢驗陰性，或陽性但已完成治療" },
+  { key: "ck_preg", label: "女性未懷孕、無備孕計畫" },
+  { key: "ck_ltbi", label: "潛伏結核感染（LTBI）檢驗為陰性，或已完成 TB/LTBI 治療" },
 ];
 
 /* 互動比較資料（口服 vs 針劑，兩側對等＋中立的「對你來說」） */
@@ -79,8 +79,8 @@ const initPatient = {
 };
 const initManager = {
   vl: "", vlDate: "", cd4: "", height: "", weight: "",
-  hbsag: "", antiHbs: "", antiHbc: "", hbvVaccineDate: "", pregTest: "", resistance: "", resistDate: "", ltbi: "", interactMeds: "",
-  regimen: "", leadIn: "",
+  hbsag: "", hbsagDate: "", antiHbs: "", antiHbsDate: "", antiHbc: "", antiHbcDate: "", hbvVaccinated: "", hbvDoses: [],
+  pregTest: "", resistance: "", resistDate: "", ltbi: "", ltbiDate: "",
   ck_adult: false, ck_vl: false, ck_oral: false, ck_q2m: false, ck_hbv: false,
   ck_resist: false, ck_drug: false, ck_preg: false, ck_ltbi: false, impression: "",
 };
@@ -120,14 +120,14 @@ function buildSummary(p, m) {
 
   const crit = [
     "1. 成人（≥18 歲）：" + yn(m.ck_adult),
-    "2. 病毒學抑制（近 6 個月 HIV RNA < 50 copies/mL）：" + yn(m.ck_vl) + "；檢驗值 " + v(m.vl) + " copies/mL（採檢日 " + v(m.vlDate) + "）",
+    "2. 病毒學抑制（近 6 個月 HIV RNA < 50 copies/mL）：" + yn(m.ck_vl) + "；近 6 個月 HIV RNA < 50 copies/mL：" + v(m.vl) + "（採檢日 " + v(m.vlDate) + "）",
     "3. 每日口服困難並敘明理由：" + yn(m.ck_oral) + "（理由詳第一段）",
     "4. 同意每 2 個月回診接受注射：" + yn(m.ck_q2m),
-    "5. 未感染 B 型肝炎：" + yn(m.ck_hbv) + "；HBsAg " + v(m.hbsag) + "｜Anti-HBs " + v(m.antiHbs) + "｜Anti-HBc " + v(m.antiHbc) + "｜B 肝疫苗接種日 " + v(m.hbvVaccineDate),
-    "6. 對 CAB／RPV 無已知或疑似抗藥性、無病毒抑制失敗史：" + yn(m.ck_resist) + "；抗藥性報告 " + v(m.resistance) + "（報告日 " + v(m.resistDate) + "）",
-    "7. 未使用顯著交互作用藥物：" + yn(m.ck_drug) + "；目前合併用藥 " + v(m.interactMeds),
-    "8. 未懷孕、無備孕計畫：" + yn(m.ck_preg) + "；妊娠檢驗 " + v(m.pregTest),
-    "9. 潛伏結核感染（LTBI）陰性或陽性已完治：" + yn(m.ck_ltbi) + "；LTBI " + v(m.ltbi),
+    "5. 未感染 B 型肝炎：" + yn(m.ck_hbv) + "；HBsAg " + v(m.hbsag) + "（採檢日 " + v(m.hbsagDate) + "）｜Anti-HBs " + v(m.antiHbs) + "（採檢日 " + v(m.antiHbsDate) + "）｜Anti-HBc " + v(m.antiHbc) + "（採檢日 " + v(m.antiHbcDate) + "）｜B 肝疫苗：" + (m.hbvVaccinated === "是" ? "已接種（" + ((m.hbvDoses || []).filter((d) => d && d.trim()).map((d, i) => "第" + (i + 1) + "劑 " + d).join("；") || "—") + "）" : v(m.hbvVaccinated)),
+    "6. 過去無病毒抑制失敗、未對 CAB 或 RPV 具有已知或疑似抗藥性：" + yn(m.ck_resist) + "；抗藥性報告 " + v(m.resistance) + "（報告日 " + v(m.resistDate) + "）",
+    "7. 未使用顯著交互作用藥物：" + yn(m.ck_drug),
+    "8. 女性未懷孕、無備孕計畫：" + yn(m.ck_preg) + "；妊娠檢驗 " + v(m.pregTest),
+    "9. 潛伏結核感染（LTBI）檢驗為陰性，或已完成 TB/LTBI 治療：" + yn(m.ck_ltbi) + "；LTBI " + v(m.ltbi) + "（對應日期 " + v(m.ltbiDate) + "）",
   ].join("\n");
 
   const bmiCalc = (() => {
@@ -136,8 +136,7 @@ function buildSummary(p, m) {
     const b = w / Math.pow(h / 100, 2);
     return isFinite(b) ? b.toFixed(1) : "";
   })();
-  const otherLabs = "CD4：" + v(m.cd4) + " cells/μL｜身高：" + v(m.height) + " cm｜體重：" + v(m.weight) + " kg｜BMI：" + v(bmiCalc);
-  const regimen = "擬用方案：" + v(m.regimen) + "\n起始方式：" + v(m.leadIn);
+  const otherLabs = "身高：" + v(m.height) + " cm｜體重：" + v(m.weight) + " kg｜BMI：" + v(bmiCalc);
 
   let s5 = "已與個案說明口服與長效針劑於給藥途徑、回診頻率（每 2 個月一次）、病毒學療效相當性、注射部位反應、給藥前後 ±7 天彈性窗，以及中斷後因藥物殘留（約 12 個月）須無縫接軌口服等面向之差異。";
   s5 += "個案偏好" + leanText + "，" + prefText + "。";
@@ -149,8 +148,7 @@ function buildSummary(p, m) {
     "一、口服治療困境敘明", s1, "",
     "二、適用條件查核（依現行〈抗 HIV 藥品處方使用規範〉長效針劑事前審查要件）", crit, "",
     "三、其他檢驗依據", otherLabs, "",
-    "四、擬定處方方案", regimen, "",
-    "五、共同決策（SDM）摘要", s5, "",
+    "四、共同決策（SDM）摘要", s5, "",
     "（本摘要由 SDM 輔助工具自動彙整，不含可識別個資；送審內容、檢驗數值與處方方案請由個案管理師與處方醫師核對確認後定稿。）",
   ].join("\n");
 }
@@ -592,8 +590,6 @@ function PatientFlow({ p, set, onSubmit, caseId, setCaseId }) {
 }
 
 /* ── 個管師端 ───────────────────────────────────────────── */
-const REGIMENS = ["每 2 個月（Q8W）CAB 600 mg + RPV 900 mg", "每 1 個月（Q4W）CAB 400 mg + RPV 600 mg"];
-const LEADINS = ["口服導入 28 天（CAB 30 mg + RPV 25 mg qd）", "直接起始注射（DTI，免口服導入）"];
 
 function ManagerDashboard({ p, m, set, setP, caseId, setCaseId }) {
   const [copied, setCopied] = useState(false);
@@ -714,29 +710,74 @@ function ManagerDashboard({ p, m, set, setP, caseId, setCaseId }) {
         <div className="col">
           <div style={{ ...card, marginBottom: 16 }}>
             <SectionLabel>檢驗數據</SectionLabel>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-              <Inp label="病毒量 HIV RNA (copies/mL)" value={m.vl} onChange={(v) => upd("vl", v)} mono />
-              <Inp label="採檢日" value={m.vlDate} onChange={(v) => upd("vlDate", v)} placeholder="YYYY-MM-DD" mono />
-              <Inp label="CD4 (cells/μL)" value={m.cd4} onChange={(v) => upd("cd4", v)} mono />
+
+            {/* 一、身體測量 */}
+            <div style={{ fontSize: 13, fontWeight: 600, color: "var(--primary)", marginBottom: 8 }}>① 身體測量</div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12 }}>
               <Inp label="身高 (cm)" value={m.height} onChange={(v) => upd("height", v)} mono />
               <Inp label="體重 (kg)" value={m.weight} onChange={(v) => upd("weight", v)} mono />
               <Inp label="BMI（自動計算）" value={(() => { const h = parseFloat(m.height), w = parseFloat(m.weight); if (!h || !w) return ""; const b = w / Math.pow(h / 100, 2); return isFinite(b) ? b.toFixed(1) : ""; })()} onChange={() => {}} mono />
-              <Sel label="HBsAg" value={m.hbsag} onChange={(v) => upd("hbsag", v)} opts={["陰性", "陽性"]} />
-              <Sel label="Anti-HBs" value={m.antiHbs} onChange={(v) => upd("antiHbs", v)} opts={["陰性", "陽性"]} />
-              <Sel label="Anti-HBc" value={m.antiHbc} onChange={(v) => upd("antiHbc", v)} opts={["陰性", "陽性"]} />
-              <Inp label="B 肝疫苗接種日" value={m.hbvVaccineDate} onChange={(v) => upd("hbvVaccineDate", v)} placeholder="YYYY-MM-DD 或未接種" mono />
+            </div>
+
+            {/* 二、HIV 病毒量 */}
+            <div style={{ height: 1, background: "var(--line)", margin: "18px 0" }} />
+            <div style={{ fontSize: 13, fontWeight: 600, color: "var(--primary)", marginBottom: 8 }}>② HIV 病毒量</div>
+            <div style={{ display: "flex", gap: 12, alignItems: "flex-end", flexWrap: "wrap" }}>
+              <div style={{ flex: "2 1 260px", minWidth: 200 }}>
+                <Sel label="近 6 個月內 HIV 病毒量 < 50 copies/mL" value={m.vl} onChange={(v) => upd("vl", v)} opts={["是", "否"]} />
+              </div>
+              <div style={{ flex: "1 1 160px", minWidth: 140 }}>
+                <Inp label="採檢日" value={m.vlDate} onChange={(v) => upd("vlDate", v)} placeholder="YYYY-MM-DD" mono />
+              </div>
+            </div>
+
+            {/* 三、B 型肝炎 */}
+            <div style={{ height: 1, background: "var(--line)", margin: "18px 0" }} />
+            <div style={{ fontSize: 13, fontWeight: 600, color: "var(--primary)", marginBottom: 8 }}>③ B 型肝炎檢驗與疫苗</div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+              <Sel label="B 肝表面抗原 HBsAg" value={m.hbsag} onChange={(v) => upd("hbsag", v)} opts={["陰性", "陽性"]} />
+              <Inp label="HBsAg 採檢日" value={m.hbsagDate} onChange={(v) => upd("hbsagDate", v)} placeholder="YYYY-MM-DD" mono />
+              <Sel label="B 肝表面抗體 Anti-HBs" value={m.antiHbs} onChange={(v) => upd("antiHbs", v)} opts={["陰性", "陽性"]} />
+              <Inp label="Anti-HBs 採檢日" value={m.antiHbsDate} onChange={(v) => upd("antiHbsDate", v)} placeholder="YYYY-MM-DD" mono />
+              <Sel label="B 肝核心抗體 Anti-HBc" value={m.antiHbc} onChange={(v) => upd("antiHbc", v)} opts={["陰性", "陽性"]} />
+              <Inp label="Anti-HBc 採檢日" value={m.antiHbcDate} onChange={(v) => upd("antiHbcDate", v)} placeholder="YYYY-MM-DD" mono />
+            </div>
+            <div style={{ marginTop: 12 }}>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, alignItems: "end" }}>
+                <Sel label="是否接種 B 肝疫苗" value={m.hbvVaccinated} onChange={(v) => { upd("hbvVaccinated", v); if (v !== "是") upd("hbvDoses", []); else if (!(m.hbvDoses || []).length) upd("hbvDoses", [""]); }} opts={["是", "否"]} />
+              </div>
+              {m.hbvVaccinated === "是" && (
+                <div style={{ marginTop: 10, padding: 12, borderRadius: 10, background: "var(--bg)", border: "1px solid var(--line)" }}>
+                  <div style={{ fontSize: 12, color: "var(--muted)", marginBottom: 8 }}>接種劑次與日期（最多 3 劑）</div>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                    {(m.hbvDoses && m.hbvDoses.length ? m.hbvDoses : [""]).map((d, i) => (
+                      <div key={i} style={{ display: "flex", gap: 8, alignItems: "flex-end" }}>
+                        <div style={{ flex: 1 }}>
+                          <Inp label={`第 ${i + 1} 劑接種日`} value={d || ""} onChange={(val) => { const arr = [...(m.hbvDoses || [])]; arr[i] = val; upd("hbvDoses", arr); }} placeholder="YYYY-MM-DD" mono />
+                        </div>
+                        {(m.hbvDoses || []).length > 1 && (
+                          <button onClick={() => { const arr = (m.hbvDoses || []).filter((_, idx) => idx !== i); upd("hbvDoses", arr.length ? arr : [""]); }} className="sbtn" style={{ padding: "9px 12px", borderRadius: 9, border: "1px solid var(--line)", background: "var(--surface)", color: "var(--muted)", cursor: "pointer", fontSize: 12 }}>移除</button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                  {(m.hbvDoses || []).length < 3 && (
+                    <button onClick={() => upd("hbvDoses", [...(m.hbvDoses || []), ""])} className="sbtn" style={{ marginTop: 10, padding: "7px 14px", borderRadius: 999, border: "1px dashed var(--primary)", background: "var(--surface)", color: "var(--primary)", cursor: "pointer", fontSize: 13, fontWeight: 600 }}>+ 新增劑次</button>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* 四、其他 */}
+            <div style={{ height: 1, background: "var(--line)", margin: "18px 0" }} />
+            <div style={{ fontSize: 13, fontWeight: 600, color: "var(--primary)", marginBottom: 8 }}>④ 其他臨床檢驗</div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
               <Sel label="妊娠檢驗" value={m.pregTest} onChange={(v) => upd("pregTest", v)} opts={["陰性", "陽性", "不適用"]} />
+              <div />
               <Sel label="CAB/RPV 抗藥性" value={m.resistance} onChange={(v) => upd("resistance", v)} opts={["無", "疑似", "有"]} />
               <Inp label="抗藥性報告日" value={m.resistDate} onChange={(v) => upd("resistDate", v)} placeholder="YYYY-MM-DD" mono />
-              <Sel label="LTBI" value={m.ltbi} onChange={(v) => upd("ltbi", v)} opts={["陰性", "陽性已治療", "陽性未治療"]} />
-            </div>
-            <div style={{ marginTop: 12 }}><Inp label="目前合併用藥（交互作用篩查）" value={m.interactMeds} onChange={(v) => upd("interactMeds", v)} placeholder="如：rifampin、carbamazepine…無則留空" /></div>
-          </div>
-          <div style={{ ...card, marginBottom: 16 }}>
-            <SectionLabel>擬定處方方案</SectionLabel>
-            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-              <Sel label="注射時程與劑量" value={m.regimen} onChange={(v) => upd("regimen", v)} opts={REGIMENS} />
-              <Sel label="起始方式" value={m.leadIn} onChange={(v) => upd("leadIn", v)} opts={LEADINS} />
+              <Sel label="LTBI 狀態" value={m.ltbi} onChange={(v) => upd("ltbi", v)} opts={["IGRA 陰性", "已完成 TB/LTBI 治療"]} />
+              <Inp label={m.ltbi === "已完成 TB/LTBI 治療" ? "治療完成日" : "IGRA 檢驗日"} value={m.ltbiDate} onChange={(v) => upd("ltbiDate", v)} placeholder="YYYY-MM-DD" mono />
             </div>
           </div>
           <div style={card}>
