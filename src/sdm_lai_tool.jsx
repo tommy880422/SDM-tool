@@ -27,22 +27,40 @@ const FREQ_OPTS = [
   { key: "4-7", label: "4–7 次／月" }, { key: "8+", label: "8 次以上／月" },
 ];
 const REASONS = {
-  busy: "工作忙碌而忘記", travel: "出差或作息被打亂", sefx: "藥物副作用不適",
-  mood: "情緒低落、缺乏動力", seen: "不想被他人看到服藥", away: "藥不在身邊",
+  busy: "太忙、太累或分心而忘記", travel: "出差、旅遊或臨時外出", shift: "輪班或作息不固定",
+  sefx: "藥物副作用不適", mood: "情緒低落、缺乏動力", seen: "不想被他人看到服藥",
+  away: "藥不在身邊、忘記帶",
 };
 const LIFE = { travel: "旅遊與外出", intimacy: "親密關係", routine: "日常作息", work: "工作排班" };
 const PREF_DIMS = [
-  { key: "p1", label: "不必每天記得吃藥" },
-  { key: "p2", label: "在意隱私（家裡不放藥、不被看到）" },
-  { key: "p3", label: "對打針的接受度" },
-  { key: "p4", label: "願意每 2 個月回診注射" },
-  { key: "p5", label: "行程／旅行的彈性" },
-  { key: "p6", label: "對副作用的容忍度" },
-  { key: "p7", label: "想減少「每天提醒自己生病」的感受" },
+  { key: "p1", label: "不必每天記得吃藥", low: "不重要", high: "非常重要" },
+  { key: "p2", label: "在意隱私(家裡不放藥、不被看到)", low: "不在意", high: "非常在意" },
+  { key: "p3", label: "想擺脫每天服藥的束縛", low: "不重要", high: "非常重要" },
+  { key: "p4", label: "願意每 2 個月回診注射", low: "不太願意", high: "非常願意" },
+  { key: "p5", label: "行程／旅行的彈性", low: "不重要", high: "非常重要" },
+  { key: "p6", label: "對副作用（打針處痠痛、腫脹、發燒等）的容忍度", low: "完全不能忍", high: "完全能接受" },
+  { key: "p7", label: "想減少「每天提醒自己生病」的感受", low: "不重要", high: "非常重要" },
 ];
 const PREF_NAME = {
-  p1: "不需每天服藥", p2: "隱私維護", p3: "對注射的接受度", p4: "配合每 2 個月回診",
-  p5: "行程與旅行彈性", p6: "對副作用的容忍", p7: "減少疾病身分的心理提醒",
+  p1: "不需每天服藥", p2: "隱私維護", p3: "想擺脫每天服藥的束縛", p4: "配合每 2 個月回診",
+  p5: "行程與旅行彈性", p6: "對副作用（含痠痛）的容忍", p7: "減少疾病身分的心理提醒",
+};
+/* 偏好高分（≥4）→ 送審摘要中具體臨床敘述 */
+const PREF_JUSTIFY = {
+  p1: "免除每日記憶服藥之心理負擔",
+  p2: "移除家中藥物存放與服藥動作以維護隱私",
+  p3: "擺脫每日服藥對生活節奏之束縛感",
+  p4: "願意配合每 2 個月回診之針劑療程規律",
+  p5: "重視日常行程與旅行之彈性",
+  p6: "願意承受針劑相關不適以換取每日服藥自由",
+  p7: "降低每日面對疾病身分之心理提醒",
+};
+/* 漏服頻率 → 順從性臨床分級 */
+const FREQ_SEV_TEXT = {
+  "0": "，遵從性良好",
+  "1-3": "，屬遵從性偶發不佳",
+  "4-7": "，屬遵從性中度不佳",
+  "8+": "，屬遵從性明顯不佳",
 };
 /* 偏好方向：+1 偏向針劑、-1 偏向口服 */
 const PREF_DIR = { p1: 1, p2: 1, p3: 1, p4: 1, p5: -1, p6: 1, p7: 1 };
@@ -50,7 +68,7 @@ const PREF_DIR = { p1: 1, p2: 1, p3: 1, p4: 1, p5: -1, p6: 1, p7: 1 };
 const CDC_ITEMS = [
   { key: "ck_adult", label: "18 歲以上成人" },
   { key: "ck_vl", label: "近 6 個月內 HIV 病毒量 < 50 copies/mL" },
-  { key: "ck_oral", label: "每日口服藥物有困難（已敘明理由）" },
+  { key: "ck_oral", label: "每日口服藥物有困難（已說明理由）" },
   { key: "ck_q2m", label: "同意配合每 2 個月回診注射" },
   { key: "ck_hbv", label: "未感染 B 型肝炎病毒" },
   { key: "ck_resist", label: "過去無病毒抑制失敗、未對 CAB 或 RPV 具有已知或疑似抗藥性" },
@@ -62,25 +80,27 @@ const CDC_ITEMS = [
 /* 互動比較資料（口服 vs 針劑，兩側對等＋中立的「對你來說」） */
 const COMPARE = [
   { dim: "怎麼用藥", oral: "每天吞一次藥錠", inj: "每 2 個月回診打針，臀部左右各一針", note: "一種靠每天的小習慣，一種靠固定回來一趟。" },
-  { dim: "多久一次", oral: "一年大約 365 次服藥", inj: "一年大約 6 次回診", note: "看你覺得「每天記得」還是「定期回來」對你比較容易。" },
-  { dim: "在哪裡進行", oral: "在家自己吃", inj: "回到院所，由護理人員施打", note: "在家方便；回診時也有醫護陪你看狀況。" },
+  { dim: "回診與領藥次數", oral: "一年約 4 次回診 + 8 次領藥（依共病調整）", inj: "一年約 6 次回診，不用再另外領藥", note: "口服藥若家裡還有庫存，臨時無法回診時比較不會中斷治療。" },
   { dim: "控制病毒的效果", oral: "穩定有效", inj: "和口服一樣好（研究中約 94 / 100 維持測不到）", note: "兩種把病毒壓住的效果是相當的，這點可以放心。" },
   { dim: "不小心錯過時", oral: "想起來就盡快補吃", inj: "前後有 7 天彈性；真的超過要先吃口服藥銜接", note: "口服較有彈性；針劑需要多留意回診時間。" },
-  { dim: "最常見的不舒服", oral: "依各人用的藥而定", inj: "打針處會痠或腫，多半 3 天內就退", note: "針劑的不適大多輕微又短暫，而且會越打越少。" },
-  { dim: "隱私感受", oral: "家裡會放藥，可能被看到", inj: "家裡不用放藥，但要固定回診", note: "若在意被發現，針劑能少一個被看到的機會。" },
+  { dim: "最常見的不舒服", oral: "口乾、頭暈、噁心、脹氣等，多半會慢慢適應", inj: "打針處會痠、腫或疼痛，多半 3 天內退，前幾次比較明顯", note: "兩種都可能有不適，只是形式不一樣。" },
+  { dim: "隱私感受", oral: "家裡會放藥，但看診時間可以自己安排", inj: "不用放藥，但要固定請假回診", note: "兩種都有各自的隱私挑戰——一個怕家人看到藥，一個怕同事問為什麼常請假。" },
+  { dim: "時間自主性", oral: "想幾點吃就幾點吃，今天忘了明天可調", inj: "必須配合院所排程，遲到要重新約", note: "想自己掌控時間的人，口服彈性大；想「不用想」的人，針劑反而輕鬆。" },
+  { dim: "看診地點", oral: "全台各院所都可以，搬家、出差都好處理", inj: "目前只有特定醫院能打，回診地點要固定", note: "生活地點常變動的人，口服比較不受限。" },
   { dim: "旅行與行程", oral: "帶著藥就能走，較自由", inj: "要配合每 2 個月的回診安排", note: "常出遠門的話，這點值得一起想想。" },
+  { dim: "怕不怕打針", oral: "不需面對針", inj: "每 2 個月臀部左右各一針", note: "對針真的很怕的人，這是真實的考量。" },
   { dim: "如果之後想停", oral: "藥很快就代謝掉了", inj: "成分會留在體內約 12 個月，要馬上接著吃口服藥", note: "停針劑不能就這樣停，需要醫療團隊幫你安排銜接。" },
 ];
 
 const initPatient = {
-  missedFreq: "", reasons: [], fearSeen: 0, hidingStress: 0, dailyReminder: 0,
-  lifeImpact: [], difficultyNote: "", knowledge: 0, injectionAccept: 0, concern: "",
+  missedFreq: "", reasons: [], fearSeen: 0, hidingStress: 0, dailyReminder: 0, missWorry: 0,
+  lifeImpact: [], difficultyNote: "", knowledge: 0, concern: "",
   p1: 0, p2: 0, p3: 0, p4: 0, p5: 0, p6: 0, p7: 0, consent: false, submitted: false,
 };
 const initManager = {
   vl: "", vlDate: "", cd4: "", height: "", weight: "",
   hbsag: "", hbsagDate: "", antiHbs: "", antiHbsDate: "", antiHbc: "", antiHbcDate: "", hbvVaccinated: "", hbvDoses: [],
-  pregTest: "", resistance: "", resistDate: "", ltbi: "", ltbiDate: "",
+  resistance: "", resistDate: "", ltbi: "", ltbiDate: "",
   ck_adult: false, ck_vl: false, ck_oral: false, ck_q2m: false, ck_hbv: false,
   ck_resist: false, ck_drug: false, ck_preg: false, ck_ltbi: false, impression: "",
 };
@@ -98,20 +118,32 @@ function prefLean(p) {
 /* ── 送審摘要（臨床精準・證據對應） ───────────────────────── */
 function buildSummary(p, m) {
   const psy = [];
-  if (p.fearSeen >= 3) psy.push("擔心被家人、同事或伴侶看到服藥");
-  if (p.hidingStress >= 3) psy.push("需藏匿藥物所造成之心理壓力");
-  if (p.dailyReminder >= 3) psy.push("每日服藥反覆提醒感染身分之心理負擔");
+  if (p.fearSeen >= 4) psy.push("擔心被家人、同事或伴侶看到服藥");
+  if (p.hidingStress >= 4) psy.push("需藏匿藥物所造成之心理壓力");
+  if (p.dailyReminder >= 4) psy.push("每日服藥反覆提醒感染者身分之心理負擔");
+  if (p.missWorry >= 4) psy.push("對漏藥或服藥不確定性的持續焦慮");
 
   let s1 = "個案近一個月自述" + (FREQ[p.missedFreq] || "漏服情形未填寫");
-  if (p.reasons.length) s1 += "，主要歸因於" + p.reasons.map((r) => REASONS[r]).join("、");
+  if (p.missedFreq && FREQ_SEV_TEXT[p.missedFreq]) s1 += FREQ_SEV_TEXT[p.missedFreq];
+  if (p.reasons.length) s1 += "，主要原因為" + p.reasons.map((r) => REASONS[r]).join("、");
   s1 += "。";
   if (psy.length) s1 += "心理社會層面，個案表達" + psy.join("、") + "。";
-  if (p.lifeImpact.length) s1 += "每日口服方案並影響其" + p.lifeImpact.map((l) => LIFE[l]).join("、") + "等面向。";
+  if (p.lifeImpact.length) s1 += "每日口服方案並影響其" + p.lifeImpact.map((l) => LIFE[l]).join("、") + "等層面。";
   if (p.difficultyNote.trim()) s1 += "個案補充：「" + p.difficultyNote.trim() + "」。";
-  s1 += "綜合評估，每日口服方案對個案之服藥順從性與生活品質造成明確負擔，具改用長效針劑之臨床適應與需求。";
+  s1 += "綜合評估，每日口服方案對個案之服藥遵從性與生活品質造成明確負擔，具改用長效針劑之臨床適應症與需求。";
 
-  const high = PREF_DIMS.filter((d) => p[d.key] >= 4).map((d) => PREF_NAME[d.key]);
-  const prefText = high.length ? "對「" + high.join("、") + "」之重視程度較高" : "各面向重視程度尚屬平均";
+  const injHigh = PREF_DIMS.filter((d) => p[d.key] >= 4 && PREF_DIR[d.key] > 0).map((d) => PREF_JUSTIFY[d.key]);
+  const oralHigh = PREF_DIMS.filter((d) => p[d.key] >= 4 && PREF_DIR[d.key] < 0).map((d) => PREF_JUSTIFY[d.key]);
+  let prefText;
+  if (injHigh.length && oralHigh.length) {
+    prefText = "於偏好評估中主要期待「" + injHigh.join("、") + "」（可透過長效針劑獲改善），同時亦重視「" + oralHigh.join("、") + "」（屬口服治療優勢），此等權衡已納入 SDM 討論";
+  } else if (injHigh.length) {
+    prefText = "於偏好評估中主要期待「" + injHigh.join("、") + "」，此等層面可透過長效針劑獲改善";
+  } else if (oralHigh.length) {
+    prefText = "於偏好評估中主要重視「" + oralHigh.join("、") + "」，此屬口服治療之優勢層面";
+  } else {
+    prefText = "於各偏好層面重視程度尚屬平均";
+  }
   const lv = prefLean(p);
   const leanText = lv > 15 ? "整體偏向改用長效針劑" : lv < -15 ? "整體偏向維持口服" : "於兩選項間尚無明顯偏向";
 
@@ -120,13 +152,13 @@ function buildSummary(p, m) {
 
   const crit = [
     "1. 成人（≥18 歲）：" + yn(m.ck_adult),
-    "2. 病毒學抑制（近 6 個月 HIV RNA < 50 copies/mL）：" + yn(m.ck_vl) + "；近 6 個月 HIV RNA < 50 copies/mL：" + v(m.vl) + "（採檢日 " + v(m.vlDate) + "）",
-    "3. 每日口服困難並敘明理由：" + yn(m.ck_oral) + "（理由詳第一段）",
+    "2. 病毒抑制（近 6 個月 HIV RNA < 50 copies/mL）：" + yn(m.ck_vl) + "；近 6 個月 HIV RNA < 50 copies/mL：" + v(m.vl) + "（採檢日 " + v(m.vlDate) + "）",
+    "3. 每日口服困難並說明理由：" + yn(m.ck_oral) + "（理由詳第一段）",
     "4. 同意每 2 個月回診接受注射：" + yn(m.ck_q2m),
     "5. 未感染 B 型肝炎：" + yn(m.ck_hbv) + "；HBsAg " + v(m.hbsag) + "（採檢日 " + v(m.hbsagDate) + "）｜Anti-HBs " + v(m.antiHbs) + "（採檢日 " + v(m.antiHbsDate) + "）｜Anti-HBc " + v(m.antiHbc) + "（採檢日 " + v(m.antiHbcDate) + "）｜B 肝疫苗：" + (m.hbvVaccinated === "是" ? "已接種（" + ((m.hbvDoses || []).filter((d) => d && d.trim()).map((d, i) => "第" + (i + 1) + "劑 " + d).join("；") || "—") + "）" : v(m.hbvVaccinated)),
     "6. 過去無病毒抑制失敗、未對 CAB 或 RPV 具有已知或疑似抗藥性：" + yn(m.ck_resist) + "；抗藥性報告 " + v(m.resistance) + "（報告日 " + v(m.resistDate) + "）",
     "7. 未使用顯著交互作用藥物：" + yn(m.ck_drug),
-    "8. 女性未懷孕、無備孕計畫：" + yn(m.ck_preg) + "；妊娠檢驗 " + v(m.pregTest),
+    "8. 女性未懷孕、無備孕計畫：" + yn(m.ck_preg),
     "9. 潛伏結核感染（LTBI）檢驗為陰性，或已完成 TB/LTBI 治療：" + yn(m.ck_ltbi) + "；LTBI " + v(m.ltbi) + "（對應日期 " + v(m.ltbiDate) + "）",
   ].join("\n");
 
@@ -138,17 +170,17 @@ function buildSummary(p, m) {
   })();
   const otherLabs = "身高：" + v(m.height) + " cm｜體重：" + v(m.weight) + " kg｜BMI：" + v(bmiCalc);
 
-  let s5 = "已與個案說明口服與長效針劑於給藥途徑、回診頻率（每 2 個月一次）、病毒學療效相當性、注射部位反應、給藥前後 ±7 天彈性窗，以及中斷後因藥物殘留（約 12 個月）須無縫接軌口服等面向之差異。";
+  let s5 = "已與個案說明口服與長效針劑於給藥途徑、回診頻率（每 2 個月一次）、病毒抑制療效相當、注射部位反應、給藥前後 ±7 天彈性時間，以及中斷後因針劑成分（約 12 個月）須立即接續口服藥銜接等層面之差異。";
   s5 += "個案偏好" + leanText + "，" + prefText + "。";
   if (m.impression.trim()) s5 += "個案管理師臨床評估：" + m.impression.trim() + "。";
-  s5 += "經醫病共同決策討論，個案" + (p.consent ? "已知情並同意" : "尚未做出最終決定，") + "評估改用長效針劑。";
+  s5 += "經醫病共享決策討論，個案" + (p.consent ? "已知情並同意" : "尚未做出最終決定，") + "評估改用長效針劑。";
 
   return [
-    "【長效注射劑（cabotegravir/rilpivirine LA）改用申請 — 個案困境與共同決策摘要】", "",
+    "【長效注射劑（cabotegravir/rilpivirine LA）改用申請 — 個案困境與醫病共享決策（SDM）摘要】", "",
     "一、口服治療困境敘明", s1, "",
-    "二、適用條件查核（依現行〈抗 HIV 藥品處方使用規範〉長效針劑事前審查要件）", crit, "",
+    "二、適用條件查核（依現行〈抗人類免疫缺乏病毒藥品處方使用規範〉長效針劑事前審查要件）", crit, "",
     "三、其他檢驗依據", otherLabs, "",
-    "四、共同決策（SDM）摘要", s5, "",
+    "四、共享決策摘要", s5, "",
     "（本摘要由 SDM 輔助工具自動彙整，不含可識別個資；送審內容、檢驗數值與處方方案請由個案管理師與處方醫師核對確認後定稿。）",
   ].join("\n");
 }
@@ -323,10 +355,10 @@ function PatientFlow({ p, set, onSubmit, caseId, setCaseId }) {
   // 必填驗證：第 2、3、4 步的關鍵題目須填完才能下一步
   const canProceed = (() => {
     if (step === 2) {
-      return !!p.missedFreq && p.fearSeen > 0 && p.hidingStress > 0 && p.dailyReminder > 0;
+      return !!p.missedFreq && p.fearSeen > 0 && p.hidingStress > 0 && p.dailyReminder > 0 && p.missWorry > 0;
     }
     if (step === 3) {
-      return p.knowledge > 0 && p.injectionAccept > 0;
+      return p.knowledge > 0;
     }
     if (step === 4) {
       return PREF_DIMS.every((d) => p[d.key] > 0);
@@ -514,11 +546,12 @@ function PatientFlow({ p, set, onSubmit, caseId, setCaseId }) {
             </div>
             <div style={card}>
               <SectionLabel n="3">這些感受，你有多常出現？<Req /></SectionLabel>
-              <p style={sub}>這些心情都很真實，也有很多人經歷過。三題都請選一個分數。</p>
+              <p style={sub}>這些心情都很真實，也有很多人經歷過。四題都請選一個分數。</p>
               <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
                 <div><div style={{ marginBottom: 8, fontSize: 14 }}>擔心被家人、同事或伴侶看到我在吃藥</div><Scale value={p.fearSeen} onChange={(v) => upd("fearSeen", v)} low="幾乎不會" high="很常這樣" /></div>
                 <div><div style={{ marginBottom: 8, fontSize: 14 }}>要把藥藏起來、找地方放，讓我有壓力</div><Scale value={p.hidingStress} onChange={(v) => upd("hidingStress", v)} low="幾乎不會" high="很常這樣" /></div>
                 <div><div style={{ marginBottom: 8, fontSize: 14 }}>每天吃藥，常讓我想起自己的狀況</div><Scale value={p.dailyReminder} onChange={(v) => upd("dailyReminder", v)} low="幾乎不會" high="很常這樣" /></div>
+                <div><div style={{ marginBottom: 8, fontSize: 14 }}>擔心自己漏藥、或是不確定自己有沒有吃</div><Scale value={p.missWorry} onChange={(v) => upd("missWorry", v)} low="幾乎不會" high="很常這樣" /></div>
               </div>
             </div>
             <div style={card}>
@@ -533,21 +566,20 @@ function PatientFlow({ p, set, onSubmit, caseId, setCaseId }) {
         {step === 3 && (
           <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
             <div style={card}><SectionLabel n="5">你對長效針劑了解多少呢？<Req /></SectionLabel><Scale value={p.knowledge} onChange={(v) => upd("knowledge", v)} low="幾乎不了解" high="很清楚" /></div>
-            <div style={card}><SectionLabel n="6">你對「打針」這件事，感覺如何？<Req /></SectionLabel><Scale value={p.injectionAccept} onChange={(v) => upd("injectionAccept", v)} low="很抗拒" high="完全可以" /></div>
-            <div style={card}><SectionLabel n="7">關於長效針劑，有沒有什麼最想問、或最在意的？</SectionLabel><textarea value={p.concern} onChange={(e) => upd("concern", e.target.value)} placeholder="例如：會不會痛？要請假回診嗎？會不會有人發現？（選填）" style={{ width: "100%", minHeight: 70, padding: 12, borderRadius: 10, border: "1px solid var(--line)", fontFamily: "var(--body)", fontSize: 14, resize: "vertical", color: "var(--ink)", background: "var(--surface)", boxSizing: "border-box" }} /></div>
+            <div style={card}><SectionLabel n="6">關於長效針劑，有沒有什麼最想問、或最在意的？</SectionLabel><textarea value={p.concern} onChange={(e) => upd("concern", e.target.value)} placeholder="例如：會不會痛？要請假回診嗎？會不會有人發現？（選填）" style={{ width: "100%", minHeight: 70, padding: 12, borderRadius: 10, border: "1px solid var(--line)", fontFamily: "var(--body)", fontSize: 14, resize: "vertical", color: "var(--ink)", background: "var(--surface)", boxSizing: "border-box" }} /></div>
           </div>
         )}
 
         {/* 4 你的偏好 */}
         {step === 4 && (
           <div style={card}>
-            <SectionLabel n="8">這些對你來說，有多重要呢？<Req /></SectionLabel>
+            <SectionLabel n="7">這些對你來說，感覺如何？<Req /></SectionLabel>
             <p style={sub}>沒有標準答案，這只是幫你和醫師更看清楚你心裡的想法。每一題都請選一個分數。</p>
             <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
               {PREF_DIMS.map((d) => (
                 <div key={d.key}>
                   <div style={{ marginBottom: 8, fontSize: 14 }}>{d.label}{!p[d.key] && <span style={{ color: "var(--red)", marginLeft: 4 }}>*</span>}</div>
-                  <Scale value={p[d.key]} onChange={(v) => upd(d.key, v)} />
+                  <Scale value={p[d.key]} onChange={(v) => upd(d.key, v)} low={d.low} high={d.high} />
                 </div>
               ))}
             </div>
@@ -641,7 +673,7 @@ function ManagerDashboard({ p, m, set, setP, caseId, setCaseId }) {
     }
   };
   const filled = p.missedFreq || p.reasons.length || p.difficultyNote;
-  const overall = worst([freqSev(p.missedFreq), scoreSev(p.fearSeen), scoreSev(p.hidingStress), scoreSev(p.dailyReminder)]);
+  const overall = worst([freqSev(p.missedFreq), scoreSev(p.fearSeen), scoreSev(p.hidingStress), scoreSev(p.dailyReminder), scoreSev(p.missWorry)]);
   const doc = buildSummary(p, m);
   const doneCount = CDC_ITEMS.filter((it) => m[it.key]).length;
 
@@ -687,9 +719,9 @@ function ManagerDashboard({ p, m, set, setP, caseId, setCaseId }) {
             {row("漏服原因", p.reasons.length ? p.reasons.map((r) => REASONS[r]).join("、") : "—")}
             {row("怕被看到", p.fearSeen ? p.fearSeen + " / 5" : "—", scoreSev(p.fearSeen))}
             {row("藏藥壓力", p.hidingStress ? p.hidingStress + " / 5" : "—", scoreSev(p.hidingStress))}
-            {row("身分提醒感", p.dailyReminder ? p.dailyReminder + " / 5" : "—", scoreSev(p.dailyReminder))}
+            {row("每日服藥心理提醒", p.dailyReminder ? p.dailyReminder + " / 5" : "—", scoreSev(p.dailyReminder))}
+            {row("擔心漏藥", p.missWorry ? p.missWorry + " / 5" : "—", scoreSev(p.missWorry))}
             {row("生活影響", p.lifeImpact.length ? p.lifeImpact.map((l) => LIFE[l]).join("、") : "—")}
-            {row("打針接受度", p.injectionAccept ? p.injectionAccept + " / 5" : "—")}
             {p.difficultyNote && <div style={{ marginTop: 12, padding: 12, borderRadius: 10, background: "var(--bg)", fontSize: 13, lineHeight: 1.6 }}>個案補充：「{p.difficultyNote}」</div>}
             {p.concern && <div style={{ marginTop: 10, padding: 12, borderRadius: 10, background: "var(--bg)", fontSize: 13, lineHeight: 1.6 }}>最在意：「{p.concern}」</div>}
           </div>
@@ -772,8 +804,6 @@ function ManagerDashboard({ p, m, set, setP, caseId, setCaseId }) {
             <div style={{ height: 1, background: "var(--line)", margin: "18px 0" }} />
             <div style={{ fontSize: 13, fontWeight: 600, color: "var(--primary)", marginBottom: 8 }}>④ 其他臨床檢驗</div>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-              <Sel label="妊娠檢驗" value={m.pregTest} onChange={(v) => upd("pregTest", v)} opts={["陰性", "陽性", "不適用"]} />
-              <div />
               <Sel label="CAB/RPV 抗藥性" value={m.resistance} onChange={(v) => upd("resistance", v)} opts={["無", "疑似", "有"]} />
               <Inp label="抗藥性報告日" value={m.resistDate} onChange={(v) => upd("resistDate", v)} placeholder="YYYY-MM-DD" mono />
               <Sel label="LTBI 狀態" value={m.ltbi} onChange={(v) => upd("ltbi", v)} opts={["IGRA 陰性", "已完成 TB/LTBI 治療"]} />
