@@ -81,7 +81,7 @@ const CDC_ITEMS = [
 const COMPARE = [
   { dim: "怎麼用藥", oral: "每天吞一次藥錠", inj: "每 2 個月回診打針，臀部左右各一針", note: "一種靠每天的小習慣，一種靠固定回來一趟。" },
   { dim: "回診與領藥次數", oral: "一年約 4 次回診 + 8 次領藥（依共病調整）", inj: "一年約 6 次回診，不用再另外領藥", note: "口服藥若家裡還有庫存，臨時無法回診時比較不會中斷治療。" },
-  { dim: "控制病毒的效果", oral: "穩定有效", inj: "和口服一樣好（研究中約 94 / 100 維持測不到）", note: "兩種把病毒壓住的效果是相當的，這點可以放心。" },
+  { dim: "控制病毒的效果", oral: "穩定有效", inj: "穩定有效（不適用初始治療）", note: "兩種把病毒壓住的效果是相當的，這點可以放心。" },
   { dim: "不小心錯過時", oral: "想起來就盡快補吃", inj: "前後有 7 天彈性；真的超過要先吃口服藥銜接", note: "口服較有彈性；針劑需要多留意回診時間。" },
   { dim: "最常見的不舒服", oral: "口乾、頭暈、噁心、脹氣等，多半會慢慢適應", inj: "打針處會痠、腫或疼痛，多半 3 天內退，前幾次比較明顯", note: "兩種都可能有不適，只是形式不一樣。" },
   { dim: "隱私感受", oral: "家裡會放藥，但看診時間可以自己安排", inj: "不用放藥，但要固定請假回診", note: "兩種都有各自的隱私挑戰——一個怕家人看到藥，一個怕同事問為什麼常請假。" },
@@ -89,7 +89,7 @@ const COMPARE = [
   { dim: "看診地點", oral: "全台各院所都可以，搬家、出差都好處理", inj: "目前只有特定醫院能打，回診地點要固定", note: "生活地點常變動的人，口服比較不受限。" },
   { dim: "旅行與行程", oral: "帶著藥就能走，較自由", inj: "要配合每 2 個月的回診安排", note: "常出遠門的話，這點值得一起想想。" },
   { dim: "怕不怕打針", oral: "不需面對針", inj: "每 2 個月臀部左右各一針", note: "對針真的很怕的人，這是真實的考量。" },
-  { dim: "如果之後想停", oral: "藥很快就代謝掉了", inj: "成分會留在體內約 12 個月，要馬上接著吃口服藥", note: "停針劑不能就這樣停，需要醫療團隊幫你安排銜接。" },
+  { dim: "如果之後想停", oral: "藥很快就代謝掉了，為確保病毒抑制效果，需盡快補充或與醫療人員討論更換適合的藥物", inj: "雖成分停留在體內約 12 個月，確認停用會接著吃口服藥", note: "停針劑不能就這樣停，需要醫療團隊幫你安排銜接。" },
 ];
 
 const initPatient = {
@@ -874,7 +874,7 @@ export default function SDMTool() {
   };
 
   return (
-    <div style={{ fontFamily: "var(--body)", color: "var(--ink)", background: "var(--bg)", minHeight: "100%", padding: "0 0 50px" }}>
+    <div style={{ fontFamily: "var(--body)", color: "var(--ink)", background: "var(--bg)", minHeight: "100%", padding: "0 0 50px", zoom: 1.1 }}>
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700&family=Manrope:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
         :root{
@@ -890,7 +890,7 @@ export default function SDMTool() {
         @keyframes fade{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
         .cols{display:flex;flex-direction:column;gap:16px}
         .col{flex:1;min-width:0}
-        .cmp{display:flex;gap:0;align-items:flex-start}
+        .cmp{display:flex;gap:0;align-items:stretch}
         .noscroll::-webkit-scrollbar{height:0}
         @media(min-width:820px){.cols{flex-direction:row;align-items:flex-start}}
         textarea:focus,input:focus,select:focus{outline:none;border-color:var(--primary)}
