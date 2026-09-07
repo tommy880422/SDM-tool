@@ -130,11 +130,11 @@ const COMPARE = [
   { dim: "不小心錯過時", oral: "想起來就盡快補吃", inj: "前後有 7 天彈性；真的超過要先吃口服藥銜接", note: "口服較有彈性；針劑需要多留意回診時間。" },
   { dim: "最常見的不舒服", oral: "口乾、頭暈、噁心、脹氣等，多半會慢慢適應", inj: "打針處會痠、腫或疼痛，多半 3 天內退，前幾次比較明顯", note: "兩種都可能有不適，只是形式不一樣。" },
   { dim: "隱私感受", oral: "家裡會放藥，但看診時間可以自己安排", inj: "不用放藥，但要固定請假回診", note: "兩種都有各自的隱私挑戰——一個怕家人看到藥，一個怕同事問為什麼常請假。" },
-  { dim: "時間自主性", oral: "想幾點吃就幾點吃，今天忘了明天可調", inj: "必須配合院所排程，遲到要重新約", note: "想自己掌控時間的人，口服彈性大；想「不用想」的人，針劑反而輕鬆。" },
-  { dim: "看診地點", oral: "全台各院所都可以，搬家、出差都好處理", inj: "目前只有特定醫院能打，回診地點要固定", note: "生活地點常變動的人，口服比較不受限。" },
+  { dim: "時間自主性", oral: "吃藥時間可以自訂，漏藥可以補", inj: "必須配合院所排程，遲到要重新約", note: "想自己掌控時間的人，口服彈性大；想「不用想」的人，針劑反而輕鬆。" },
+  { dim: "看診地點", oral: "指定醫院都可以，搬家、出差都好處理", inj: "需確認該指定醫院有無長效針劑，回診地點要固定", note: "生活地點常變動的人，口服比較不受限。" },
   { dim: "旅行與行程", oral: "帶著藥就能走，較自由", inj: "要配合每 2 個月的回診安排", note: "常出遠門的話，這點值得一起想想。" },
   { dim: "怕不怕打針", oral: "不需面對針", inj: "每 2 個月臀部左右各一針", note: "對針真的很怕的人，這是真實的考量。" },
-  { dim: "如果之後想停", oral: "藥很快就代謝掉了，為確保病毒抑制效果，需盡快補充或與醫療人員討論更換適合的藥物", inj: "雖成分停留在體內約 12 個月，確認停用會接著吃口服藥", note: "停針劑不能就這樣停，需要醫療團隊幫你安排銜接。" },
+  { dim: "如果之後想停", oral: "藥很快代謝掉，需盡快補藥或與醫療人員討論換藥", inj: "雖成分停留在體內約 12 個月，確認停用會接著吃口服藥", note: "停針劑不能就這樣停，需要醫療團隊幫你安排銜接。" },
 ];
 
 const initPatient = {
@@ -335,13 +335,12 @@ function InteractiveCompare() {
         ))}
       </div>
       <div key={i} className="fade">
-        <div className="cmp" style={{ gap: 0 }}>
-          <div style={{ flex: 1, padding: 16, borderRadius: "12px 0 0 12px", background: "var(--primary-soft)" }}>
+        <div className="cmp" style={{ gap: 12 }}>
+          <div style={{ flex: 1, padding: 16, borderRadius: 12, background: "var(--primary-soft)" }}>
             <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 9, color: "var(--primary)" }}><IconPill /><b style={{ fontFamily: "var(--display)", fontSize: 15 }}>每日口服</b></div>
             <div style={{ fontSize: 14, lineHeight: 1.6, color: "var(--ink)" }}>{r.oral}</div>
           </div>
-          <div style={{ width: 0 }} />
-          <div style={{ flex: 1, padding: 16, borderRadius: "0 12px 12px 0", background: "#F3E3D9" }}>
+          <div style={{ flex: 1, padding: 16, borderRadius: 12, background: "#F3E3D9" }}>
             <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 9, color: "var(--accent)" }}><IconSyringe /><b style={{ fontFamily: "var(--display)", fontSize: 15 }}>長效針劑</b></div>
             <div style={{ fontSize: 14, lineHeight: 1.6, color: "var(--ink)" }}>{r.inj}</div>
           </div>
@@ -375,7 +374,7 @@ function Sel({ label, value, onChange, opts }) {
 
 /* ── 個案端 ─────────────────────────────────────────────── */
 const ELIG = [
-  ["病毒量已經穩定測不到（近 6 個月 < 50）", "針劑是設計給「已經控制得很好」的人，這樣換過去才安全又安心。"],
+  ["穩定服藥半年以上，病毒量測不到（U=U）", "針劑是給「已經控制得很好」的人接手用的，有這個基礎換過去才安全又安心。申請時會看近 6 個月內的抽血報告，確認病毒量 < 50 copies/mL。"],
   ["目前的藥對你還有效、沒有抗藥性", "少數換藥後不順利的人，多半是換之前體內就帶有抗藥性，所以會先幫你確認。"],
   ["沒有 B 肝、沒有會互相影響的藥、潛伏結核已排除或治療過", "這些可能影響療效或安全，先看過比較放心。"],
   ["可以每 2 個月回來打針", "這點最重要——準時回診，針劑才能一直好好保護你。"],
@@ -531,9 +530,9 @@ function PatientFlow({ p, set, onSubmit, caseId, setCaseId }) {
                       <div key={i} style={{ borderTop: i ? "1px solid var(--line)" : "none", padding: "11px 0" }}>
                         <div style={{ fontSize: 12, color: "var(--muted)", marginBottom: 5 }}>{r.dim}</div>
                         <div className="cmp">
-                          <div style={{ flex: 1, fontSize: 13, lineHeight: 1.5 }}>{r.oral}</div>
-                          <div style={{ width: 12 }} />
-                          <div style={{ flex: 1, fontSize: 13, lineHeight: 1.5 }}>{r.inj}</div>
+                          <div style={{ flex: 1, fontSize: 13, lineHeight: 1.5, paddingRight: 14 }}>{r.oral}</div>
+                          <div style={{ width: 1, background: "var(--line)", flexShrink: 0 }} />
+                          <div style={{ flex: 1, fontSize: 13, lineHeight: 1.5, paddingLeft: 14 }}>{r.inj}</div>
                         </div>
                       </div>
                     ))}
@@ -576,7 +575,7 @@ function PatientFlow({ p, set, onSubmit, caseId, setCaseId }) {
               </div>
             </div>
             <Collapse title="打針是什麼情況？之後要注意什麼？">
-              <b>打針的時候：</b>打在臀部肌肉，左右各一針，打完會請你留下來觀察 10–15 分鐘。多數人一開始會先吃大約一個月的口服藥，確認身體適應後再開始打針。<br /><br />
+              <b>打針的時候：</b>打在臀部肌肉，左右各一針，打完會請你留下來觀察 10–15 分鐘。目前國內做法是<b>從原本的口服藥直接換成針劑</b>，不需要先吃一段口服導入期，確認條件符合後就可以安排第一次注射。<br /><br />
               <b>打完之後（這些都很正常）：</b>打針的地方痠、紅、腫或有硬塊都很常見，通常幾天就好；附近肌肉有點痠也別擔心。<br /><br />
               <b style={{ color: "var(--accent)" }}>有幾件事想特別提醒你（都是為了讓針劑一直保護你）：</b><br />
               ・每次打針最好在預定日「前後 7 天內」完成。<br />
