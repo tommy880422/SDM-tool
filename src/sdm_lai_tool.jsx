@@ -77,6 +77,51 @@ const CDC_ITEMS = [
   { key: "ck_ltbi", label: "潛伏結核感染（LTBI）檢驗為陰性，或已完成 TB/LTBI 治療" },
 ];
 
+/* ── 檢驗值 → 適用條件自動判定（避免勾選與檢驗數據互相衝突） ──── */
+const monthsSince = (d) => {
+  const t = Date.parse(d);
+  return isFinite(t) ? (Date.now() - t) / 2629746000 : null;
+};
+/* 回傳 { ck_key: { pass, why } }；有回傳者代表可由檢驗值直接判定，UI 應鎖定該勾選 */
+function deriveChecks(m) {
+  const r = {};
+  if (m.vl === "否") {
+    r.ck_vl = { pass: false, why: "HIV 病毒量未達 < 50 copies/mL" };
+  } else if (m.vl === "是") {
+    const mo = monthsSince(m.vlDate);
+    r.ck_vl = mo !== null && mo > 6
+      ? { pass: false, why: "採檢日已逾 6 個月，需重新檢驗" }
+      : { pass: true, why: "病毒量 < 50 copies/mL" };
+  }
+  if (m.hbsag === "陽性") r.ck_hbv = { pass: false, why: "HBsAg 陽性，屬 B 型肝炎共同感染，不適用長效針劑" };
+  else if (m.hbsag === "陰性") r.ck_hbv = { pass: true, why: "HBsAg 陰性" };
+
+  if (m.resistance === "有" || m.resistance === "疑似") r.ck_resist = { pass: false, why: "CAB／RPV 抗藥性為「" + m.resistance + "」" };
+  else if (m.resistance === "無") r.ck_resist = { pass: true, why: "無 CAB／RPV 抗藥性" };
+
+  if (m.ltbi) r.ck_ltbi = { pass: true, why: m.ltbi };
+  return r;
+}
+/* 有效勾選狀態：檢驗值可判定者以檢驗值為準，其餘沿用人工勾選 */
+function effectiveChecks(m) {
+  const derived = deriveChecks(m);
+  const checks = {};
+  CDC_ITEMS.forEach((it) => { checks[it.key] = derived[it.key] ? derived[it.key].pass : !!m[it.key]; });
+  const blockers = CDC_ITEMS.filter((it) => derived[it.key] && !derived[it.key].pass).map((it) => derived[it.key].why);
+  return { derived, checks, blockers };
+}
+/* 不影響申請資格、但需提醒的檢驗發現 */
+function labWarnings(m) {
+  const w = [];
+  if (m.hbsag === "陰性" && m.antiHbc === "陽性" && m.antiHbs === "陰性")
+    w.push("Anti-HBc 單獨陽性（HBsAg 與 Anti-HBs 皆陰性）：需排除隱匿型 B 型肝炎感染，建議加驗 HBV DNA 後再評估。");
+  if (m.hbsag === "陰性" && m.antiHbs === "陰性" && m.antiHbc === "陰性" && m.hbvVaccinated === "否")
+    w.push("對 B 型肝炎無免疫力且未接種疫苗：建議先安排 B 肝疫苗接種。");
+  if (m.ltbi === "已完成 TB/LTBI 治療" && !m.ltbiDate) w.push("LTBI 已完成治療，但未填治療完成日。");
+  if (m.hbsag === "陽性") w.push("HBsAg 陽性個案若停用含 TDF／TAF 之口服處方，有 B 型肝炎再活化風險，請維持抗 HBV 治療。");
+  return w;
+}
+
 /* 互動比較資料（口服 vs 針劑，兩側對等＋中立的「對你來說」） */
 const COMPARE = [
   { dim: "怎麼用藥", oral: "每天吞一次藥錠", inj: "每 2 個月回診打針，臀部左右各一針", note: "一種靠每天的小習慣，一種靠固定回來一趟。" },
@@ -147,20 +192,29 @@ function buildSummary(p, m) {
   const lv = prefLean(p);
   const leanText = lv > 15 ? "整體偏向改用長效針劑" : lv < -15 ? "整體偏向維持口服" : "於兩選項間尚無明顯偏向";
 
-  const yn = (b) => (b ? "符合 ✓" : "未確認 ▢");
+  const { derived, blockers } = effectiveChecks(m);
+  const st = (k) => (derived[k]
+    ? (derived[k].pass ? "符合 ✓（依檢驗值判定）" : "不符合 ✗（" + derived[k].why + "）")
+    : (m[k] ? "符合 ✓" : "未確認 ▢"));
   const v = (x) => (x && String(x).trim() ? x : "—");
 
   const crit = [
-    "1. 成人（≥18 歲）：" + yn(m.ck_adult),
-    "2. 病毒抑制（近 6 個月 HIV RNA < 50 copies/mL）：" + yn(m.ck_vl) + "；近 6 個月 HIV RNA < 50 copies/mL：" + v(m.vl) + "（採檢日 " + v(m.vlDate) + "）",
-    "3. 每日口服困難並說明理由：" + yn(m.ck_oral) + "（理由詳第一段）",
-    "4. 同意每 2 個月回診接受注射：" + yn(m.ck_q2m),
-    "5. 未感染 B 型肝炎：" + yn(m.ck_hbv) + "；HBsAg " + v(m.hbsag) + "（採檢日 " + v(m.hbsagDate) + "）｜Anti-HBs " + v(m.antiHbs) + "（採檢日 " + v(m.antiHbsDate) + "）｜Anti-HBc " + v(m.antiHbc) + "（採檢日 " + v(m.antiHbcDate) + "）｜B 肝疫苗：" + (m.hbvVaccinated === "是" ? "已接種（" + ((m.hbvDoses || []).filter((d) => d && d.trim()).map((d, i) => "第" + (i + 1) + "劑 " + d).join("；") || "—") + "）" : v(m.hbvVaccinated)),
-    "6. 過去無病毒抑制失敗、未對 CAB 或 RPV 具有已知或疑似抗藥性：" + yn(m.ck_resist) + "；抗藥性報告 " + v(m.resistance) + "（報告日 " + v(m.resistDate) + "）",
-    "7. 未使用顯著交互作用藥物：" + yn(m.ck_drug),
-    "8. 女性未懷孕、無備孕計畫：" + yn(m.ck_preg),
-    "9. 潛伏結核感染（LTBI）檢驗為陰性，或已完成 TB/LTBI 治療：" + yn(m.ck_ltbi) + "；LTBI " + v(m.ltbi) + "（對應日期 " + v(m.ltbiDate) + "）",
+    "1. 成人（≥18 歲）：" + st("ck_adult"),
+    "2. 病毒抑制（近 6 個月 HIV RNA < 50 copies/mL）：" + st("ck_vl") + "；近 6 個月 HIV RNA < 50 copies/mL：" + v(m.vl) + "（採檢日 " + v(m.vlDate) + "）",
+    "3. 每日口服困難並說明理由：" + st("ck_oral") + "（理由詳第一段）",
+    "4. 同意每 2 個月回診接受注射：" + st("ck_q2m"),
+    "5. 未感染 B 型肝炎：" + st("ck_hbv") + "；HBsAg " + v(m.hbsag) + "（採檢日 " + v(m.hbsagDate) + "）｜Anti-HBs " + v(m.antiHbs) + "（採檢日 " + v(m.antiHbsDate) + "）｜Anti-HBc " + v(m.antiHbc) + "（採檢日 " + v(m.antiHbcDate) + "）｜B 肝疫苗：" + (m.hbvVaccinated === "是" ? "已接種（" + ((m.hbvDoses || []).filter((d) => d && d.trim()).map((d, i) => "第" + (i + 1) + "劑 " + d).join("；") || "—") + "）" : v(m.hbvVaccinated)),
+    "6. 過去無病毒抑制失敗、未對 CAB 或 RPV 具有已知或疑似抗藥性：" + st("ck_resist") + "；抗藥性報告 " + v(m.resistance) + "（報告日 " + v(m.resistDate) + "）",
+    "7. 未使用顯著交互作用藥物：" + st("ck_drug"),
+    "8. 女性未懷孕、無備孕計畫：" + st("ck_preg"),
+    "9. 潛伏結核感染（LTBI）檢驗為陰性，或已完成 TB/LTBI 治療：" + st("ck_ltbi") + "；LTBI " + v(m.ltbi) + "（對應日期 " + v(m.ltbiDate) + "）",
   ].join("\n");
+
+  const warns = labWarnings(m);
+  const critNote = blockers.length
+    ? "\n\n※ 依現有檢驗數據，本案目前不符合下列要件，暫不建議送審：" + blockers.join("；") + "。"
+    : "";
+  const warnNote = warns.length ? "\n※ 檢驗提醒：" + warns.join(" ") : "";
 
   const bmiCalc = (() => {
     const h = parseFloat(m.height), w = parseFloat(m.weight);
@@ -174,11 +228,12 @@ function buildSummary(p, m) {
   s5 += "個案偏好" + leanText + "，" + prefText + "。";
   if (m.impression.trim()) s5 += "個案管理師臨床評估：" + m.impression.trim() + "。";
   s5 += "經醫病共享決策討論，個案" + (p.consent ? "已知情並同意" : "尚未做出最終決定，") + "評估改用長效針劑。";
+  if (blockers.length) s5 += "惟依現有檢驗結果尚有未符之適用要件（詳第二段），待條件釐清後再行送審。";
 
   return [
     "【長效注射劑（cabotegravir/rilpivirine LA）改用申請 — 個案困境與醫病共享決策（SDM）摘要】", "",
     "一、口服治療困境敘明", s1, "",
-    "二、適用條件查核（依現行〈抗人類免疫缺乏病毒藥品處方使用規範〉長效針劑事前審查要件）", crit, "",
+    "二、適用條件查核（依現行〈抗人類免疫缺乏病毒藥品處方使用規範〉長效針劑事前審查要件）", crit + critNote + warnNote, "",
     "三、其他檢驗依據", otherLabs, "",
     "四、共享決策摘要", s5, "",
     "（本摘要由 SDM 輔助工具自動彙整，不含可識別個資；送審內容、檢驗數值與處方方案請由個案管理師與處方醫師核對確認後定稿。）",
@@ -675,7 +730,9 @@ function ManagerDashboard({ p, m, set, setP, caseId, setCaseId }) {
   const filled = p.missedFreq || p.reasons.length || p.difficultyNote;
   const overall = worst([freqSev(p.missedFreq), scoreSev(p.fearSeen), scoreSev(p.hidingStress), scoreSev(p.dailyReminder), scoreSev(p.missWorry)]);
   const doc = buildSummary(p, m);
-  const doneCount = CDC_ITEMS.filter((it) => m[it.key]).length;
+  const { derived, checks, blockers } = effectiveChecks(m);
+  const warns = labWarnings(m);
+  const doneCount = CDC_ITEMS.filter((it) => checks[it.key]).length;
 
   const copy = () => {
     try { if (navigator.clipboard && window.isSecureContext) { navigator.clipboard.writeText(doc).then(() => { setCopied(true); setTimeout(() => setCopied(false), 2000); }); return; } } catch (e) {}
@@ -813,15 +870,32 @@ function ManagerDashboard({ p, m, set, setP, caseId, setCaseId }) {
           <div style={card}>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
               <SectionLabel>適用條件查核</SectionLabel>
-              <span style={{ fontFamily: "var(--mono)", fontSize: 12, color: doneCount === 9 ? "var(--green)" : "var(--muted)", fontWeight: 600 }}>{doneCount} / 9</span>
+              <span style={{ fontFamily: "var(--mono)", fontSize: 12, color: blockers.length ? "var(--red)" : doneCount === 9 ? "var(--green)" : "var(--muted)", fontWeight: 600 }}>{doneCount} / 9</span>
             </div>
+            {blockers.length > 0 && (
+              <div style={{ marginBottom: 10, padding: "10px 12px", borderRadius: 10, background: "var(--red-bg)", fontSize: 13, lineHeight: 1.6, color: "var(--red)" }}>
+                <b>依檢驗數據，本案不符合申請條件：</b>
+                <ul style={{ margin: "6px 0 0", paddingLeft: 18 }}>{blockers.map((b, i) => <li key={i}>{b}</li>)}</ul>
+              </div>
+            )}
+            {warns.length > 0 && (
+              <div style={{ marginBottom: 10, padding: "10px 12px", borderRadius: 10, background: "var(--amber-bg)", fontSize: 13, lineHeight: 1.6, color: "#7a5a1e" }}>
+                <b>檢驗提醒：</b>
+                <ul style={{ margin: "6px 0 0", paddingLeft: 18 }}>{warns.map((w, i) => <li key={i}>{w}</li>)}</ul>
+              </div>
+            )}
             <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
               {CDC_ITEMS.map((it) => {
                 const hint = it.key === "ck_oral" && filled;
+                const d = derived[it.key];
                 return (
-                  <label key={it.key} style={{ display: "flex", gap: 11, alignItems: "flex-start", padding: "9px 0", cursor: "pointer", borderBottom: "1px solid var(--line)" }}>
-                    <input type="checkbox" checked={m[it.key]} onChange={(e) => upd(it.key, e.target.checked)} style={{ marginTop: 2, width: 16, height: 16, accentColor: "var(--primary)", flexShrink: 0 }} />
-                    <span style={{ fontSize: 13.5, color: "var(--ink)", lineHeight: 1.5 }}>{it.label}{hint && <span style={{ marginLeft: 8, fontSize: 11, color: "var(--accent)", fontWeight: 600 }}>← 個案自評顯示有困難</span>}</span>
+                  <label key={it.key} style={{ display: "flex", gap: 11, alignItems: "flex-start", padding: "9px 0", cursor: d ? "not-allowed" : "pointer", borderBottom: "1px solid var(--line)", opacity: d && !d.pass ? 0.85 : 1 }}>
+                    <input type="checkbox" checked={checks[it.key]} disabled={!!d} onChange={(e) => upd(it.key, e.target.checked)} style={{ marginTop: 2, width: 16, height: 16, accentColor: d && !d.pass ? "var(--red)" : "var(--primary)", flexShrink: 0 }} />
+                    <span style={{ fontSize: 13.5, color: "var(--ink)", lineHeight: 1.5 }}>
+                      {it.label}
+                      {hint && <span style={{ marginLeft: 8, fontSize: 11, color: "var(--accent)", fontWeight: 600 }}>← 個案自評顯示有困難</span>}
+                      {d && <span style={{ marginLeft: 8, fontSize: 11, color: d.pass ? "var(--green)" : "var(--red)", fontWeight: 600 }}>{d.pass ? "✓ " : "✗ "}{d.why}（依檢驗值自動判定）</span>}
+                    </span>
                   </label>
                 );
               })}
@@ -881,7 +955,7 @@ export default function SDMTool() {
           --bg:#F4F1EA; --surface:#FBFAF6; --ink:#26241E; --muted:#6E695E;
           --line:#E5DECF; --primary:#1E4D45; --primary-soft:#E5EEEB; --accent:#C0613F;
           --green:#5C8A6B; --amber:#CE9A3C; --red:#BC5743;
-          --amber-bg:#F6ECD5;
+          --amber-bg:#F6ECD5; --red-bg:#F7E2DD;
           --display:'Fraunces',Georgia,serif; --body:'Manrope',system-ui,sans-serif; --mono:'JetBrains Mono',monospace;
         }
         *{box-sizing:border-box}
