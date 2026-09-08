@@ -683,7 +683,7 @@ function ManagerDashboard({ p, m, set, setP, caseId, setCaseId }) {
   const [inputCaseId, setInputCaseId] = useState(caseId || "");
   const [loadStatus, setLoadStatus] = useState(""); // "", "listening", "notfound", "error"
   const [saveStatus, setSaveStatus] = useState(""); // "", "saving", "saved", "error"
-  const upd = (k, v) => set({ ...m, [k]: v });
+  const upd = (k, v) => set((prev) => ({ ...prev, [k]: v }));
 
   // 監聽個案問卷：caseId 變更時自動連線、即時同步
   useEffect(() => {
