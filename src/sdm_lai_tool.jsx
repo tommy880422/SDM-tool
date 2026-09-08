@@ -998,7 +998,7 @@ export default function SDMTool() {
       <div style={{ maxWidth: 880, margin: "0 auto", padding: "28px 20px 0" }}>
         <div style={{ borderTop: "1px solid var(--line)", paddingTop: 18, fontSize: 12, color: "var(--muted)", lineHeight: 1.75 }}>
           <b style={{ color: "var(--ink)" }}>資料依據</b>：FDA 仿單與 ATLAS、FLAIR、ATLAS-2M 第三期臨床試驗；台灣現行〈抗人類免疫缺乏病毒藥品處方使用規範〉（113/4 版，長效針劑需經 CDC 事前審查、藥費由 CDC 支應）。數字來自臨床研究，實際情形可能因個人狀況與院所而異。<br />
-          本工具與台灣愛滋病護理學會（TANA）臨床人員共同發展｜不收集可識別個資｜最後更新：2026 年。
+          本工具與台灣愛滋病護理學會（TANA）臨床人員共同發展｜不收集可識別個資｜版本 v3.0｜最後更新：2026 年 9 月 8 日。
         </div>
       </div>
     </div>
