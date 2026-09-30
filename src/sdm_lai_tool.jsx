@@ -391,6 +391,9 @@ function PatientFlow({ p, set, onSubmit, caseId, setCaseId }) {
   const upd = (k, v) => set({ ...p, [k]: v });
   const toggle = (k, key) => upd(k, p[k].includes(key) ? p[k].filter((x) => x !== key) : [...p[k], key]);
 
+  // 換頁（含送出完成頁）時回到頁首，從頭開始閱讀
+  useEffect(() => { window.scrollTo(0, 0); }, [step, p.submitted]);
+
   const handleResume = async () => {
     const id = resumeId.trim().toUpperCase();
     if (!id) return;
@@ -478,12 +481,12 @@ function PatientFlow({ p, set, onSubmit, caseId, setCaseId }) {
             <div style={{ ...card, padding: "14px 18px", background: "var(--primary-soft)", borderColor: "transparent" }}>
               {!showResume ? (
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
-                  <div style={{ fontSize: 13.5, color: "var(--ink)", lineHeight: 1.6 }}>之前填過嗎？輸入上次的編號可以把上次的答案帶回來繼續。</div>
+                  <div style={{ fontSize: 13.5, color: "var(--ink)", lineHeight: 1.6 }}>之前填過嗎？輸入上次的編號可以把上次的答案帶回來繼續。<b>第一次填寫可以跳過</b>，直接往下看就好。</div>
                   <button onClick={() => setShowResume(true)} className="sbtn" style={{ padding: "7px 14px", borderRadius: 999, border: "1px solid var(--primary)", background: "var(--surface)", color: "var(--primary)", cursor: "pointer", fontSize: 13, fontWeight: 600 }}>輸入編號繼續</button>
                 </div>
               ) : (
                 <div>
-                  <div style={{ fontSize: 13, color: "var(--muted)", marginBottom: 8 }}>輸入上次的編號（例：A3F-7KM），就會把上次的答案帶回來。</div>
+                  <div style={{ fontSize: 13, color: "var(--muted)", marginBottom: 8 }}>輸入上次的編號（例：A3F-7KM），就會把上次的答案帶回來。第一次填寫不用輸入，按「取消」往下看就好。</div>
                   <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                     <input value={resumeId} onChange={(e) => { setResumeId(e.target.value); setResumeStatus(""); }} onKeyDown={(e) => e.key === "Enter" && handleResume()} placeholder="A3F-7KM" style={{ flex: "1 1 180px", padding: "9px 11px", borderRadius: 9, border: "1px solid var(--line)", fontFamily: "var(--mono)", fontSize: 15, color: "var(--ink)", background: "var(--surface)", boxSizing: "border-box", textTransform: "uppercase" }} />
                     <button onClick={handleResume} disabled={resumeStatus === "loading" || !resumeId.trim()} className="sbtn" style={{ padding: "9px 16px", borderRadius: 10, border: "none", background: "var(--primary)", color: "#fff", cursor: "pointer", fontWeight: 600 }}>{resumeStatus === "loading" ? "讀取中…" : "帶入"}</button>
