@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, createContext, useContext } from 'react';
 import {
   makeCaseId,
   submitPatientResponse,
@@ -20,26 +20,47 @@ const PLAYLIST_ID = "PL-ZI3-lFRjhCZ1m-_YMJ_ZxXJ3zMsCbXz";
 const VIDEO_WATCH_URL = `https://www.youtube.com/watch?v=${VIDEO_ID}&list=${PLAYLIST_ID}`;
 const VIDEO_EMBED_URL = `https://www.youtube-nocookie.com/embed/${VIDEO_ID}?list=${PLAYLIST_ID}&rel=0&modestbranding=1`;
 
+/* 語言：個案端可切換中文／English；個管師端與送審文本固定中文。
+   資料常數以 en 欄位並列英文；元件內用 tr("中文", "English") 取字、pick(資料) 取對應語言版本。 */
+const LangCtx = createContext("zh");
+function useLang() {
+  const en = useContext(LangCtx) === "en";
+  return { en, tr: (zh, enText) => (en ? enText : zh), pick: (o) => (en && o.en ? o.en : o) };
+}
+
 /* ── 對照表 ─────────────────────────────────────────────── */
 const FREQ = { "0": "無漏服紀錄", "1-3": "每月約 1–3 次漏服", "4-7": "每月約 4–7 次漏服", "8+": "每月 8 次以上漏服" };
 const FREQ_OPTS = [
-  { key: "0", label: "幾乎沒漏" }, { key: "1-3", label: "1–3 次／月" },
-  { key: "4-7", label: "4–7 次／月" }, { key: "8+", label: "8 次以上／月" },
+  { key: "0", label: "幾乎沒漏", en: "Rarely or never" }, { key: "1-3", label: "1–3 次／月", en: "1–3 times a month" },
+  { key: "4-7", label: "4–7 次／月", en: "4–7 times a month" }, { key: "8+", label: "8 次以上／月", en: "8+ times a month" },
 ];
 const REASONS = {
   busy: "太忙、太累或分心而忘記", travel: "出差、旅遊或臨時外出", shift: "輪班或作息不固定",
   sefx: "藥物副作用不適", mood: "情緒低落、缺乏動力", seen: "不想被他人看到服藥",
   away: "藥不在身邊、忘記帶",
 };
+const REASONS_EN = {
+  busy: "Busy, tired or distracted and forgot", travel: "Business trips, travel or unplanned outings", shift: "Shift work or an irregular schedule",
+  sefx: "Side effects from the medicine", mood: "Feeling low or unmotivated", seen: "Didn't want others to see me take it",
+  away: "Didn't have my pills with me",
+};
 const LIFE = { travel: "旅遊與外出", intimacy: "親密關係", routine: "日常作息", work: "工作排班" };
+const LIFE_EN = { travel: "Travel and outings", intimacy: "Intimate relationships", routine: "Daily routine", work: "Work shifts" };
 const PREF_DIMS = [
-  { key: "p1", label: "不必每天記得吃藥", low: "不重要", high: "非常重要" },
-  { key: "p2", label: "在意隱私(家裡不放藥、不被看到)", low: "不在意", high: "非常在意" },
-  { key: "p3", label: "想擺脫每天服藥的束縛", low: "不重要", high: "非常重要" },
-  { key: "p4", label: "願意每 2 個月回診注射", low: "不太願意", high: "非常願意" },
-  { key: "p5", label: "行程／旅行的彈性", low: "不重要", high: "非常重要" },
-  { key: "p6", label: "對副作用（打針處痠痛、腫脹、發燒等）的容忍度", low: "完全不能忍", high: "完全能接受" },
-  { key: "p7", label: "想減少「每天提醒自己生病」的感受", low: "不重要", high: "非常重要" },
+  { key: "p1", label: "不必每天記得吃藥", low: "不重要", high: "非常重要",
+    en: { label: "Not having to remember a pill every day", low: "Not important", high: "Very important" } },
+  { key: "p2", label: "在意隱私(家裡不放藥、不被看到)", low: "不在意", high: "非常在意",
+    en: { label: "Privacy (no pills at home, not being seen taking them)", low: "Doesn't matter", high: "Matters a lot" } },
+  { key: "p3", label: "想擺脫每天服藥的束縛", low: "不重要", high: "非常重要",
+    en: { label: "Being free from the daily pill routine", low: "Not important", high: "Very important" } },
+  { key: "p4", label: "願意每 2 個月回診注射", low: "不太願意", high: "非常願意",
+    en: { label: "Willing to come in for a shot every 2 months", low: "Not very willing", high: "Very willing" } },
+  { key: "p5", label: "行程／旅行的彈性", low: "不重要", high: "非常重要",
+    en: { label: "Flexibility for plans and travel", low: "Not important", high: "Very important" } },
+  { key: "p6", label: "對副作用（打針處痠痛、腫脹、發燒等）的容忍度", low: "完全不能忍", high: "完全能接受",
+    en: { label: "How well I can handle side effects (soreness or swelling where the shot was given, fever, etc.)", low: "Can't handle it at all", high: "Totally fine with it" } },
+  { key: "p7", label: "想減少「每天提醒自己生病」的感受", low: "不重要", high: "非常重要",
+    en: { label: "Not being reminded of my condition every day", low: "Not important", high: "Very important" } },
 ];
 const PREF_NAME = {
   p1: "不需每天服藥", p2: "隱私維護", p3: "想擺脫每天服藥的束縛", p4: "配合每 2 個月回診",
@@ -124,17 +145,28 @@ function labWarnings(m) {
 
 /* 互動比較資料（口服 vs 針劑，兩側對等＋中立的「對你來說」） */
 const COMPARE = [
-  { dim: "怎麼用藥", oral: "每天吞一次藥錠", inj: "每 2 個月回診打針，臀部左右各一針", note: "一種靠每天的小習慣，一種靠固定回來一趟。" },
-  { dim: "回診與領藥次數", oral: "一年約 4 次回診 + 8 次領藥（依共病調整）", inj: "一年約 6 次回診，不用再另外領藥", note: "口服藥若家裡還有庫存，臨時無法回診時比較不會中斷治療。" },
-  { dim: "控制病毒的效果", oral: "穩定有效", inj: "穩定有效（不適用初始治療）", note: "兩種把病毒壓住的效果是相當的，這點可以放心。" },
-  { dim: "不小心錯過時", oral: "想起來就盡快補吃", inj: "前後有 7 天彈性；真的超過要先吃口服藥銜接", note: "口服較有彈性；針劑需要多留意回診時間。" },
-  { dim: "最常見的不舒服", oral: "口乾、頭暈、噁心、脹氣等，多半會慢慢適應", inj: "打針處會痠、腫或疼痛，多半 3 天內退，前幾次比較明顯", note: "兩種都可能有不適，只是形式不一樣。" },
-  { dim: "隱私感受", oral: "家裡會放藥，但看診時間可以自己安排", inj: "不用放藥，但要固定請假回診", note: "兩種都有各自的隱私挑戰——一個怕家人看到藥，一個怕同事問為什麼常請假。" },
-  { dim: "時間自主性", oral: "吃藥時間可以自訂，漏藥可以補", inj: "必須配合院所排程，遲到要重新約", note: "想自己掌控時間的人，口服彈性大；想「不用想」的人，針劑反而輕鬆。" },
-  { dim: "看診地點", oral: "指定醫院都可以，搬家、出差都好處理", inj: "需確認該指定醫院有無長效針劑，回診地點要固定", note: "生活地點常變動的人，口服比較不受限。" },
-  { dim: "旅行與行程", oral: "帶著藥就能走，較自由", inj: "要配合每 2 個月的回診安排", note: "常出遠門的話，這點值得一起想想。" },
-  { dim: "怕不怕打針", oral: "不需面對針", inj: "每 2 個月臀部左右各一針", note: "對針真的很怕的人，這是真實的考量。" },
-  { dim: "如果之後想停", oral: "藥很快代謝掉，需盡快補藥或與醫療人員討論換藥", inj: "雖成分停留在體內約 12 個月，確認停用會接著吃口服藥", note: "停針劑不能就這樣停，需要醫療團隊幫你安排銜接。" },
+  { dim: "怎麼用藥", oral: "每天吞一次藥錠", inj: "每 2 個月回診打針，臀部左右各一針", note: "一種靠每天的小習慣，一種靠固定回來一趟。",
+    en: { dim: "How it's taken", oral: "One tablet by mouth, once a day", inj: "A clinic visit every 2 months: one shot in each side of the buttocks", note: "One relies on a small daily habit; the other on a regular trip to the clinic." } },
+  { dim: "回診與領藥次數", oral: "一年約 4 次回診 + 8 次領藥（依共病調整）", inj: "一年約 6 次回診，不用再另外領藥", note: "口服藥若家裡還有庫存，臨時無法回診時比較不會中斷治療。",
+    en: { dim: "Clinic & pharmacy visits", oral: "About 4 clinic visits + 8 pharmacy pickups a year (may vary with other health conditions)", inj: "About 6 clinic visits a year, no separate pharmacy pickups", note: "With pills, a supply at home means treatment is less likely to be interrupted if you suddenly can't make a visit." } },
+  { dim: "控制病毒的效果", oral: "穩定有效", inj: "穩定有效（不適用初始治療）", note: "兩種把病毒壓住的效果是相當的，這點可以放心。",
+    en: { dim: "How well it controls the virus", oral: "Reliably effective", inj: "Reliably effective (not for people just starting treatment)", note: "Both are equally good at keeping the virus down — you can feel reassured about that." } },
+  { dim: "不小心錯過時", oral: "想起來就盡快補吃", inj: "前後有 7 天彈性；真的超過要先吃口服藥銜接", note: "口服較有彈性；針劑需要多留意回診時間。",
+    en: { dim: "If you miss one", oral: "Take it as soon as you remember", inj: "7 days of leeway either side of the date; beyond that, pills are used to bridge the gap", note: "Pills are more forgiving; with injections you need to keep a closer eye on visit dates." } },
+  { dim: "最常見的不舒服", oral: "口乾、頭暈、噁心、脹氣等，多半會慢慢適應", inj: "打針處會痠、腫或疼痛，多半 3 天內退，前幾次比較明顯", note: "兩種都可能有不適，只是形式不一樣。",
+    en: { dim: "Most common side effects", oral: "Dry mouth, dizziness, nausea, bloating, etc. — most people get used to it over time", inj: "Soreness, swelling or pain where the shot was given, usually gone within 3 days; more noticeable the first few times", note: "Both can cause some discomfort — just in different ways." } },
+  { dim: "隱私感受", oral: "家裡會放藥，但看診時間可以自己安排", inj: "不用放藥，但要固定請假回診", note: "兩種都有各自的隱私挑戰——一個怕家人看到藥，一個怕同事問為什麼常請假。",
+    en: { dim: "Privacy", oral: "Pills are kept at home, but you schedule clinic visits yourself", inj: "No pills at home, but you need regular time off for clinic visits", note: "Each has its own privacy challenge — with one, family might see the pills; with the other, coworkers might ask why you often take time off." } },
+  { dim: "時間自主性", oral: "吃藥時間可以自訂，漏藥可以補", inj: "必須配合院所排程，遲到要重新約", note: "想自己掌控時間的人，口服彈性大；想「不用想」的人，針劑反而輕鬆。",
+    en: { dim: "Control over timing", oral: "You choose when to take it; a missed dose can be made up", inj: "Must fit the clinic's schedule; if you're late, you'll need to rebook", note: "If you like to control your own time, pills are more flexible; if you'd rather not have to think about it, injections may feel easier." } },
+  { dim: "看診地點", oral: "指定醫院都可以，搬家、出差都好處理", inj: "需確認該指定醫院有無長效針劑，回診地點要固定", note: "生活地點常變動的人，口服比較不受限。",
+    en: { dim: "Where you get care", oral: "Any designated hospital — easy if you move or travel for work", inj: "Check that your designated hospital offers the injection; you'll need to keep going to the same place", note: "If you often move around, pills are less restrictive." } },
+  { dim: "旅行與行程", oral: "帶著藥就能走，較自由", inj: "要配合每 2 個月的回診安排", note: "常出遠門的話，這點值得一起想想。",
+    en: { dim: "Travel & plans", oral: "Just pack your pills and go — more freedom", inj: "Plans need to fit around a clinic visit every 2 months", note: "If you often travel far, this is worth thinking through together." } },
+  { dim: "怕不怕打針", oral: "不需面對針", inj: "每 2 個月臀部左右各一針", note: "對針真的很怕的人，這是真實的考量。",
+    en: { dim: "Fear of needles", oral: "No needles", inj: "One shot in each side of the buttocks every 2 months", note: "If needles really scare you, that's a real thing to consider." } },
+  { dim: "如果之後想停", oral: "藥很快代謝掉，需盡快補藥或與醫療人員討論換藥", inj: "雖成分停留在體內約 12 個月，確認停用會接著吃口服藥", note: "停針劑不能就這樣停，需要醫療團隊幫你安排銜接。",
+    en: { dim: "If you want to stop later", oral: "Leaves the body quickly — restart soon, or talk with your care team about switching", inj: "Stays in the body for about 12 months; once you stop, you start pills right away", note: "You can't simply stop the injection — your care team will help plan the switch back to pills." } },
 ];
 
 const initPatient = {
@@ -311,11 +343,12 @@ function Collapse({ title, children }) {
 }
 /* 偏好光譜（非指示性） */
 function PrefSpectrum({ lean }) {
+  const { tr } = useLang();
   const pos = (lean + 100) / 2;
-  const label = lean > 15 ? "偏向長效針劑" : lean < -15 ? "偏向繼續口服" : "兩者之間，還沒有很明顯";
+  const label = lean > 15 ? tr("偏向長效針劑", "Leaning towards the injection") : lean < -15 ? tr("偏向繼續口服", "Leaning towards daily pills") : tr("兩者之間，還沒有很明顯", "In between — no clear lean yet");
   return (
     <div>
-      <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: "var(--muted)", marginBottom: 7 }}><span>繼續口服</span><span>長效針劑</span></div>
+      <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: "var(--muted)", marginBottom: 7 }}><span>{tr("繼續口服", "Keep taking pills")}</span><span>{tr("長效針劑", "Long-acting injection")}</span></div>
       <div style={{ position: "relative", height: 10, borderRadius: 999, background: "linear-gradient(90deg,var(--primary-soft),var(--bg) 50%,#F0E0D6)" }}>
         <div style={{ position: "absolute", top: "50%", left: pos + "%", transform: "translate(-50%,-50%)", width: 18, height: 18, borderRadius: 999, background: "var(--accent)", border: "3px solid var(--surface)", boxShadow: "0 1px 5px rgba(0,0,0,.25)" }} />
       </div>
@@ -325,28 +358,29 @@ function PrefSpectrum({ lean }) {
 }
 /* 互動比較：點選面向 → 兩側對等卡片＋中立說明 */
 function InteractiveCompare() {
+  const { tr, pick } = useLang();
   const [i, setI] = useState(0);
-  const r = COMPARE[i];
+  const r = pick(COMPARE[i]);
   return (
     <div>
       <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 14 }}>
         {COMPARE.map((c, idx) => (
-          <button key={idx} onClick={() => setI(idx)} className="sbtn" style={{ whiteSpace: "nowrap", padding: "8px 14px", borderRadius: 999, cursor: "pointer", fontSize: 13.5, fontWeight: idx === i ? 700 : 500, border: idx === i ? "1px solid var(--primary)" : "1px solid var(--line)", background: idx === i ? "var(--primary)" : "var(--surface)", color: idx === i ? "#fff" : "var(--ink)", transition: "all .15s" }}>{c.dim}</button>
+          <button key={idx} onClick={() => setI(idx)} className="sbtn" style={{ whiteSpace: "nowrap", padding: "8px 14px", borderRadius: 999, cursor: "pointer", fontSize: 13.5, fontWeight: idx === i ? 700 : 500, border: idx === i ? "1px solid var(--primary)" : "1px solid var(--line)", background: idx === i ? "var(--primary)" : "var(--surface)", color: idx === i ? "#fff" : "var(--ink)", transition: "all .15s" }}>{pick(c).dim}</button>
         ))}
       </div>
       <div key={i} className="fade">
         <div className="cmp" style={{ gap: 12 }}>
           <div style={{ flex: 1, padding: 16, borderRadius: 12, background: "var(--primary-soft)" }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 9, color: "var(--primary)" }}><IconPill /><b style={{ fontFamily: "var(--display)", fontSize: 15 }}>每日口服</b></div>
+            <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 9, color: "var(--primary)" }}><IconPill /><b style={{ fontFamily: "var(--display)", fontSize: 15 }}>{tr("每日口服", "Daily pills")}</b></div>
             <div style={{ fontSize: 14, lineHeight: 1.6, color: "var(--ink)" }}>{r.oral}</div>
           </div>
           <div style={{ flex: 1, padding: 16, borderRadius: 12, background: "#F3E3D9" }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 9, color: "var(--accent)" }}><IconSyringe /><b style={{ fontFamily: "var(--display)", fontSize: 15 }}>長效針劑</b></div>
+            <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 9, color: "var(--accent)" }}><IconSyringe /><b style={{ fontFamily: "var(--display)", fontSize: 15 }}>{tr("長效針劑", "Long-acting injection")}</b></div>
             <div style={{ fontSize: 14, lineHeight: 1.6, color: "var(--ink)" }}>{r.inj}</div>
           </div>
         </div>
         <div style={{ marginTop: 12, padding: "12px 14px", borderRadius: 10, border: "1px dashed var(--line)", fontSize: 13.5, color: "var(--muted)", lineHeight: 1.65 }}>
-          <b style={{ color: "var(--ink)" }}>對你來說：</b>{r.note}
+          <b style={{ color: "var(--ink)" }}>{tr("對你來說：", "What it means for you: ")}</b>{r.note}
         </div>
       </div>
     </div>
@@ -374,20 +408,28 @@ function Sel({ label, value, onChange, opts }) {
 
 /* ── 個案端 ─────────────────────────────────────────────── */
 const ELIG = [
-  ["穩定服藥半年以上，病毒量測不到（U=U）", "針劑是給「已經控制得很好」的人接手用的，有這個基礎換過去才安全又安心。申請時會看近 6 個月內的抽血報告，確認病毒量 < 50 copies/mL。"],
-  ["目前的藥對你還有效、沒有抗藥性", "少數換藥後不順利的人，多半是換之前體內就帶有抗藥性，所以會先幫你確認。"],
-  ["沒有 B 肝、沒有會互相影響的藥、潛伏結核已排除或治療過", "這些可能影響療效或安全，先看過比較放心。"],
-  ["可以每 2 個月回來打針", "這點最重要——準時回診，針劑才能一直好好保護你。"],
-  ["女性目前沒有懷孕，也沒有懷孕計畫", ""],
+  { t: "穩定服藥半年以上，病毒量測不到（U=U）", why: "針劑是給「已經控制得很好」的人接手用的，有這個基礎換過去才安全又安心。申請時會看近 6 個月內的抽血報告，確認病毒量 < 50 copies/mL。",
+    en: { t: "On treatment for at least 6 months with an undetectable viral load (U=U)", why: "The injection is meant to take over for people whose virus is already well controlled — that foundation is what makes switching safe. The application checks a blood test from the past 6 months showing a viral load below 50 copies/mL." } },
+  { t: "目前的藥對你還有效、沒有抗藥性", why: "少數換藥後不順利的人，多半是換之前體內就帶有抗藥性，所以會先幫你確認。",
+    en: { t: "Your current medicine still works for you, with no drug resistance", why: "The few people who run into problems after switching usually had drug resistance beforehand, so this is checked first." } },
+  { t: "沒有 B 肝、沒有會互相影響的藥、潛伏結核已排除或治療過", why: "這些可能影響療效或安全，先看過比較放心。",
+    en: { t: "No hepatitis B, no interacting medicines, and latent TB ruled out or already treated", why: "These can affect how well or how safely it works, so it's best to check them first." } },
+  { t: "可以每 2 個月回來打針", why: "這點最重要——準時回診，針劑才能一直好好保護你。",
+    en: { t: "Able to come back for a shot every 2 months", why: "This matters most — coming back on time is what keeps the injection protecting you." } },
+  { t: "女性目前沒有懷孕，也沒有懷孕計畫", why: "",
+    en: { t: "For women: not pregnant and not planning a pregnancy", why: "" } },
 ];
 
 function PatientFlow({ p, set, onSubmit, caseId, setCaseId }) {
+  const { en, tr, pick } = useLang();
   const [step, setStep] = useState(0);
   const [showHint, setShowHint] = useState(false);
   const [showResume, setShowResume] = useState(false);
   const [resumeId, setResumeId] = useState("");
   const [resumeStatus, setResumeStatus] = useState(""); // "", "loading", "notfound", "error", "ok"
-  const labels = ["先認識", "安心了解", "你的狀況", "你的想法", "你的偏好", "完成"];
+  const labels = en
+    ? ["Basics", "Safety", "Your life", "Thoughts", "Values", "Done"]
+    : ["先認識", "安心了解", "你的狀況", "你的想法", "你的偏好", "完成"];
   const upd = (k, v) => set({ ...p, [k]: v });
   const toggle = (k, key) => upd(k, p[k].includes(key) ? p[k].filter((x) => x !== key) : [...p[k], key]);
 
@@ -438,27 +480,30 @@ function PatientFlow({ p, set, onSubmit, caseId, setCaseId }) {
       <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
         <div style={{ ...card, textAlign: "center", padding: "34px 24px" }}>
           <div style={{ width: 52, height: 52, borderRadius: 999, background: "var(--primary)", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 14px" }}><IconCheck /></div>
-          <div style={{ fontFamily: "var(--display)", fontSize: 22, fontWeight: 600, marginBottom: 8 }}>已經送出囉，謝謝你</div>
-          <p style={{ color: "var(--muted)", maxWidth: 430, margin: "0 auto", lineHeight: 1.75 }}>謝謝你願意花時間把這些填完。你的狀況和想法已經傳給個管師，會在討論時一起參考。要不要換成長效針劑，最後會由你和醫療團隊一起決定，不用有壓力。</p>
+          <div style={{ fontFamily: "var(--display)", fontSize: 22, fontWeight: 600, marginBottom: 8 }}>{tr("已經送出囉，謝謝你", "Sent — thank you!")}</div>
+          <p style={{ color: "var(--muted)", maxWidth: 430, margin: "0 auto", lineHeight: 1.75 }}>{tr("謝謝你願意花時間把這些填完。你的狀況和想法已經傳給個管師，會在討論時一起參考。要不要換成長效針劑，最後會由你和醫療團隊一起決定，不用有壓力。", "Thank you for taking the time to fill this out. Your situation and thoughts have been sent to your case manager and will be part of your discussion. Whether to switch to the injection will be decided by you and your care team together — no pressure.")}</p>
           {caseId && (
             <div style={{ marginTop: 22, padding: "16px 20px", borderRadius: 12, background: "var(--primary-soft)", display: "inline-block" }}>
-              <div style={{ fontSize: 12, color: "var(--muted)", marginBottom: 6 }}>請把這個編號告訴個管師</div>
+              <div style={{ fontSize: 12, color: "var(--muted)", marginBottom: 6 }}>{tr("請把這個編號告訴個管師", "Please give this code to your case manager")}</div>
               <div style={{ fontFamily: "var(--mono)", fontSize: 28, fontWeight: 700, color: "var(--primary)", letterSpacing: 2 }}>{caseId}</div>
             </div>
           )}
         </div>
         <div style={{ ...card, background: "var(--primary-soft)", borderColor: "transparent" }}>
-          <SectionLabel>帶去診間（建議截圖起來）</SectionLabel>
+          <SectionLabel>{tr("帶去診間（建議截圖起來）", "Bring this to your visit (a screenshot works)")}</SectionLabel>
           <div style={{ background: "var(--surface)", borderRadius: 12, padding: 16, marginBottom: 14 }}><PrefSpectrum lean={lean} /></div>
-          {p.concern && <div style={{ background: "var(--surface)", borderRadius: 12, padding: 14, marginBottom: 14, fontSize: 14, lineHeight: 1.6 }}>你最想問醫師的：「{p.concern}」</div>}
-          <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 8 }}>看診時可以這樣問醫師：</div>
+          {p.concern && <div style={{ background: "var(--surface)", borderRadius: 12, padding: 14, marginBottom: 14, fontSize: 14, lineHeight: 1.6 }}>{tr("你最想問醫師的：", "What you most want to ask your doctor: ")}{tr("「" + p.concern + "」", "“" + p.concern + "”")}</div>}
+          <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 8 }}>{tr("看診時可以這樣問醫師：", "Questions you could ask your doctor:")}</div>
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-            {["我的檢驗，符合改用長效針劑的條件嗎？", "萬一哪次趕不上回診，我該怎麼辦？", "注射部位反應，對我可能會是什麼情況？"].map((q, i) => (
+            {(en
+              ? ["Do my test results meet the requirements for switching to the injection?", "What should I do if I can't make it to a shot visit?", "What might injection-site reactions be like for me?"]
+              : ["我的檢驗，符合改用長效針劑的條件嗎？", "萬一哪次趕不上回診，我該怎麼辦？", "注射部位反應，對我可能會是什麼情況？"]
+            ).map((q, i) => (
               <div key={i} style={{ display: "flex", gap: 9, fontSize: 13.5, lineHeight: 1.5 }}><span style={{ fontFamily: "var(--mono)", color: "var(--primary)" }}>{i + 1}.</span>{q}</div>
             ))}
           </div>
         </div>
-        <button onClick={() => { set({ ...p, submitted: false }); setStep(0); }} className="sbtn" style={{ alignSelf: "center", padding: "10px 18px", borderRadius: 10, border: "1px solid var(--line)", background: "var(--surface)", color: "var(--ink)", cursor: "pointer", fontWeight: 600 }}>重新填寫</button>
+        <button onClick={() => { set({ ...p, submitted: false }); setStep(0); }} className="sbtn" style={{ alignSelf: "center", padding: "10px 18px", borderRadius: 10, border: "1px solid var(--line)", background: "var(--surface)", color: "var(--ink)", cursor: "pointer", fontWeight: 600 }}>{tr("重新填寫", "Start over")}</button>
       </div>
     );
   }
@@ -481,30 +526,30 @@ function PatientFlow({ p, set, onSubmit, caseId, setCaseId }) {
             <div style={{ ...card, padding: "14px 18px", background: "var(--primary-soft)", borderColor: "transparent" }}>
               {!showResume ? (
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
-                  <div style={{ fontSize: 13.5, color: "var(--ink)", lineHeight: 1.6 }}>之前填過嗎？輸入上次的編號可以把上次的答案帶回來繼續。<b>第一次填寫可以跳過</b>，直接往下看就好。</div>
-                  <button onClick={() => setShowResume(true)} className="sbtn" style={{ padding: "7px 14px", borderRadius: 999, border: "1px solid var(--primary)", background: "var(--surface)", color: "var(--primary)", cursor: "pointer", fontSize: 13, fontWeight: 600 }}>輸入編號繼續</button>
+                  <div style={{ fontSize: 13.5, color: "var(--ink)", lineHeight: 1.6 }}>{tr(<>之前填過嗎？輸入上次的編號可以把上次的答案帶回來繼續。<b>第一次填寫可以跳過</b>，直接往下看就好。</>, <>Filled this out before? Enter your code to bring back your previous answers. <b>First time here? Skip this</b> and just scroll down.</>)}</div>
+                  <button onClick={() => setShowResume(true)} className="sbtn" style={{ padding: "7px 14px", borderRadius: 999, border: "1px solid var(--primary)", background: "var(--surface)", color: "var(--primary)", cursor: "pointer", fontSize: 13, fontWeight: 600 }}>{tr("輸入編號繼續", "Enter my code")}</button>
                 </div>
               ) : (
                 <div>
-                  <div style={{ fontSize: 13, color: "var(--muted)", marginBottom: 8 }}>輸入上次的編號（例：A3F-7KM），就會把上次的答案帶回來。第一次填寫不用輸入，按「取消」往下看就好。</div>
+                  <div style={{ fontSize: 13, color: "var(--muted)", marginBottom: 8 }}>{tr("輸入上次的編號（例：A3F-7KM），就會把上次的答案帶回來。第一次填寫不用輸入，按「取消」往下看就好。", "Enter the code you got last time (e.g. A3F-7KM) to bring back your answers. First time here? No need — tap “Cancel” and scroll down.")}</div>
                   <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                     <input value={resumeId} onChange={(e) => { setResumeId(e.target.value); setResumeStatus(""); }} onKeyDown={(e) => e.key === "Enter" && handleResume()} placeholder="A3F-7KM" style={{ flex: "1 1 180px", padding: "9px 11px", borderRadius: 9, border: "1px solid var(--line)", fontFamily: "var(--mono)", fontSize: 15, color: "var(--ink)", background: "var(--surface)", boxSizing: "border-box", textTransform: "uppercase" }} />
-                    <button onClick={handleResume} disabled={resumeStatus === "loading" || !resumeId.trim()} className="sbtn" style={{ padding: "9px 16px", borderRadius: 10, border: "none", background: "var(--primary)", color: "#fff", cursor: "pointer", fontWeight: 600 }}>{resumeStatus === "loading" ? "讀取中…" : "帶入"}</button>
-                    <button onClick={() => { setShowResume(false); setResumeId(""); setResumeStatus(""); }} className="sbtn" style={{ padding: "9px 12px", borderRadius: 10, border: "1px solid var(--line)", background: "var(--surface)", color: "var(--muted)", cursor: "pointer", fontWeight: 500 }}>取消</button>
+                    <button onClick={handleResume} disabled={resumeStatus === "loading" || !resumeId.trim()} className="sbtn" style={{ padding: "9px 16px", borderRadius: 10, border: "none", background: "var(--primary)", color: "#fff", cursor: "pointer", fontWeight: 600 }}>{resumeStatus === "loading" ? tr("讀取中…", "Loading…") : tr("帶入", "Load")}</button>
+                    <button onClick={() => { setShowResume(false); setResumeId(""); setResumeStatus(""); }} className="sbtn" style={{ padding: "9px 12px", borderRadius: 10, border: "1px solid var(--line)", background: "var(--surface)", color: "var(--muted)", cursor: "pointer", fontWeight: 500 }}>{tr("取消", "Cancel")}</button>
                   </div>
-                  {resumeStatus === "notfound" && <div style={{ marginTop: 8, fontSize: 13, color: "var(--amber)" }}>查無此編號，請確認後再試。</div>}
-                  {resumeStatus === "error" && <div style={{ marginTop: 8, fontSize: 13, color: "var(--red)" }}>讀取時發生問題，請稍後再試。</div>}
-                  {resumeStatus === "ok" && <div style={{ marginTop: 8, fontSize: 13, color: "var(--green)" }}>● 已帶入上次的答案（編號 {caseId}），可以直接修改後送出。</div>}
+                  {resumeStatus === "notfound" && <div style={{ marginTop: 8, fontSize: 13, color: "var(--amber)" }}>{tr("查無此編號，請確認後再試。", "We couldn't find that code. Please check it and try again.")}</div>}
+                  {resumeStatus === "error" && <div style={{ marginTop: 8, fontSize: 13, color: "var(--red)" }}>{tr("讀取時發生問題，請稍後再試。", "Something went wrong. Please try again later.")}</div>}
+                  {resumeStatus === "ok" && <div style={{ marginTop: 8, fontSize: 13, color: "var(--green)" }}>{tr(`● 已帶入上次的答案（編號 ${caseId}），可以直接修改後送出。`, `● Your previous answers are loaded (code ${caseId}). You can edit them and submit again.`)}</div>}
                 </div>
               )}
             </div>
             <div style={card}>
-              <SectionLabel>先一起認識它</SectionLabel>
-              <p style={{ color: "var(--muted)", lineHeight: 1.75, marginTop: -4 }}>能把病毒穩定控制到現在，其實很不容易，你已經很用心了。醫師提到，你或許可以考慮改用「長效針劑」——每 2 個月回診打一針，不用再天天吃藥。這裡沒有標準答案，也不用急著決定；先花幾分鐘認識它，我們慢慢一起看。</p>
+              <SectionLabel>{tr("先一起認識它", "Let's get to know it together")}</SectionLabel>
+              <p style={{ color: "var(--muted)", lineHeight: 1.75, marginTop: -4 }}>{tr("能把病毒穩定控制到現在，其實很不容易，你已經很用心了。醫師提到，你或許可以考慮改用「長效針劑」——每 2 個月回診打一針，不用再天天吃藥。這裡沒有標準答案，也不用急著決定；先花幾分鐘認識它，我們慢慢一起看。", "Keeping the virus under control this well takes real effort — you've been doing a great job. Your doctor mentioned that you might consider switching to a long-acting injection: one clinic visit for a shot every 2 months, instead of a pill every day. There's no right answer here, and no need to rush. Take a few minutes to learn about it — we'll go through it together, step by step.")}</p>
               <div style={{ marginTop: 16, borderRadius: 14, overflow: "hidden", border: "1px solid var(--line)", aspectRatio: "16 / 9", background: "#1b1b18" }}>
                 <iframe
                   src={VIDEO_EMBED_URL}
-                  title="衛教影片"
+                  title={tr("衛教影片", "Patient education video")}
                   style={{ width: "100%", height: "100%", border: 0, display: "block" }}
                   allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
                   allowFullScreen
@@ -512,24 +557,24 @@ function PatientFlow({ p, set, onSubmit, caseId, setCaseId }) {
                 />
               </div>
               <div style={{ marginTop: 8, fontSize: 12.5, color: "var(--muted)", textAlign: "right" }}>
-                若影片無法播放，<a href={VIDEO_WATCH_URL} target="_blank" rel="noopener noreferrer" style={{ color: "var(--primary)", fontWeight: 600 }}>於 YouTube 開啟 ↗</a>
+                {tr("若影片無法播放，", "This video is in Chinese. If it doesn't play, ")}<a href={VIDEO_WATCH_URL} target="_blank" rel="noopener noreferrer" style={{ color: "var(--primary)", fontWeight: 600 }}>{tr("於 YouTube 開啟 ↗", "open it on YouTube ↗")}</a>
               </div>
-              <div style={{ marginTop: 16, padding: 15, borderRadius: 10, background: "var(--primary-soft)", fontSize: 14, lineHeight: 1.7 }}><b style={{ color: "var(--primary)" }}>你要一起想的是：</b>繼續每天吃藥，還是改成每 2 個月回診打一針？這兩種都能把病毒控制得很好，沒有哪一個比較「對」——差別只在哪一種更貼近你的生活。最後想怎麼選，你說了算。</div>
+              <div style={{ marginTop: 16, padding: 15, borderRadius: 10, background: "var(--primary-soft)", fontSize: 14, lineHeight: 1.7 }}><b style={{ color: "var(--primary)" }}>{tr("你要一起想的是：", "The question to think about: ")}</b>{tr("繼續每天吃藥，還是改成每 2 個月回診打一針？這兩種都能把病毒控制得很好，沒有哪一個比較「對」——差別只在哪一種更貼近你的生活。最後想怎麼選，你說了算。", "keep taking a pill every day, or switch to a shot every 2 months? Both control the virus very well. Neither one is the “right” choice — the difference is which one fits your life better. In the end, the choice is yours.")}</div>
             </div>
 
             <div style={card}>
-              <SectionLabel>兩種方式，慢慢比較看看</SectionLabel>
-              <p style={sub}>點任一個項目，看看它們的差別。沒有哪個比較好，只有哪個比較適合你。</p>
+              <SectionLabel>{tr("兩種方式，慢慢比較看看", "Compare the two options at your own pace")}</SectionLabel>
+              <p style={sub}>{tr("點任一個項目，看看它們的差別。沒有哪個比較好，只有哪個比較適合你。", "Tap any topic to see how they differ. Neither is better overall — it's about which one suits you.")}</p>
               <InteractiveCompare />
               <div style={{ marginTop: 16 }}>
-                <Collapse title="想一次看完整對照表">
+                <Collapse title={tr("想一次看完整對照表", "See the full comparison table")}>
                   <div style={{ marginTop: 4 }}>
                     <div className="cmp" style={{ paddingBottom: 8, borderBottom: "2px solid var(--primary)" }}>
-                      <div style={{ flex: 1, fontWeight: 700, fontFamily: "var(--display)" }}>每日口服</div>
+                      <div style={{ flex: 1, fontWeight: 700, fontFamily: "var(--display)" }}>{tr("每日口服", "Daily pills")}</div>
                       <div style={{ width: 12 }} />
-                      <div style={{ flex: 1, fontWeight: 700, fontFamily: "var(--display)" }}>長效針劑</div>
+                      <div style={{ flex: 1, fontWeight: 700, fontFamily: "var(--display)" }}>{tr("長效針劑", "Long-acting injection")}</div>
                     </div>
-                    {COMPARE.map((r, i) => (
+                    {COMPARE.map(pick).map((r, i) => (
                       <div key={i} style={{ borderTop: i ? "1px solid var(--line)" : "none", padding: "11px 0" }}>
                         <div style={{ fontSize: 12, color: "var(--muted)", marginBottom: 5 }}>{r.dim}</div>
                         <div className="cmp">
@@ -544,8 +589,8 @@ function PatientFlow({ p, set, onSubmit, caseId, setCaseId }) {
               </div>
             </div>
 
-            <Collapse title="有哪些藥不能跟它一起用？">
-              下面這些藥可能會跟長效針劑互相影響，需要先評估或避免：抗結核藥（rifampin、rifapentine、rifabutin）、部分抗癲癇藥（carbamazepine、oxcarbazepine、phenobarbital、phenytoin）、全身性類固醇 dexamethasone（單次使用除外），以及聖約翰草。如果你正在用其中任何一種，記得讓醫療團隊知道就好，他們會幫你看。
+            <Collapse title={tr("有哪些藥不能跟它一起用？", "Which medicines can't be used with it?")}>
+              {tr("下面這些藥可能會跟長效針劑互相影響，需要先評估或避免：抗結核藥（rifampin、rifapentine、rifabutin）、部分抗癲癇藥（carbamazepine、oxcarbazepine、phenobarbital、phenytoin）、全身性類固醇 dexamethasone（單次使用除外），以及聖約翰草。如果你正在用其中任何一種，記得讓醫療團隊知道就好，他們會幫你看。", "These medicines may interact with the long-acting injection and need to be checked first or avoided: TB medicines (rifampin, rifapentine, rifabutin), some seizure medicines (carbamazepine, oxcarbazepine, phenobarbital, phenytoin), the steroid dexamethasone taken by mouth or injection (a single dose is OK), and St. John's wort. If you're using any of these, just let your care team know — they'll look into it with you.")}
             </Collapse>
           </div>
         )}
@@ -554,22 +599,22 @@ function PatientFlow({ p, set, onSubmit, caseId, setCaseId }) {
         {step === 1 && (
           <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
             <div style={card}>
-              <SectionLabel>打完針，身體可能會有什麼感覺？</SectionLabel>
-              <FreqArray count={76} note="打針的地方可能會痠、紅、腫，或摸到一點硬塊。研究中每 2 個月打一次的人，大約 76 / 100 曾遇到。" />
-              <p style={{ fontSize: 13.5, color: "var(--ink)", lineHeight: 1.7, marginTop: 14, marginBottom: 0 }}>聽起來好像不少，但別太擔心——幾乎都是輕微的（約 98 / 100），通常 3 天左右就慢慢退了。而且打久了會越來越少：剛開始大約 7 成的人會有感覺，後來降到 2 成左右。</p>
+              <SectionLabel>{tr("打完針，身體可能會有什麼感覺？", "How might your body feel after a shot?")}</SectionLabel>
+              <FreqArray count={76} note={tr("打針的地方可能會痠、紅、腫，或摸到一點硬塊。研究中每 2 個月打一次的人，大約 76 / 100 曾遇到。", "The spot where you got the shot may feel sore, red or swollen, or you may feel a small lump. In studies, about 76 in 100 people getting a shot every 2 months had this at some point.")} />
+              <p style={{ fontSize: 13.5, color: "var(--ink)", lineHeight: 1.7, marginTop: 14, marginBottom: 0 }}>{tr("聽起來好像不少，但別太擔心——幾乎都是輕微的（約 98 / 100），通常 3 天左右就慢慢退了。而且打久了會越來越少：剛開始大約 7 成的人會有感覺，後來降到 2 成左右。", "That may sound like a lot, but try not to worry — almost all of it is mild (about 98 in 100 cases) and usually fades in about 3 days. It also becomes less common over time: about 7 in 10 people notice it at first, dropping to about 2 in 10 later on.")}</p>
             </div>
             <div style={card}>
-              <SectionLabel>如果想停，或病毒跑回來呢？</SectionLabel>
+              <SectionLabel>{tr("如果想停，或病毒跑回來呢？", "What about stopping, or the virus coming back?")}</SectionLabel>
               <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
-                <FreqArray count={1} color="var(--red)" note="因為打針不舒服而決定停下來的人很少，大約 1 / 100。" />
-                <FreqArray count={1} color="var(--red)" note="病毒重新出現也很少見，大約 1 / 100；而且大多和換藥前體內就帶有抗藥性有關——所以醫療團隊會先幫你檢查，盡量把風險降到最低。" />
+                <FreqArray count={1} color="var(--red)" note={tr("因為打針不舒服而決定停下來的人很少，大約 1 / 100。", "Very few people stop because the shots are uncomfortable — about 1 in 100.")} />
+                <FreqArray count={1} color="var(--red)" note={tr("病毒重新出現也很少見，大約 1 / 100；而且大多和換藥前體內就帶有抗藥性有關——所以醫療團隊會先幫你檢查，盡量把風險降到最低。", "The virus coming back is also rare — about 1 in 100 — and it's mostly linked to drug resistance that was already there before switching. That's why your care team checks first, to keep the risk as low as possible.")} />
               </div>
             </div>
             <div style={{ ...card, background: "var(--primary-soft)", borderColor: "transparent" }}>
-              <SectionLabel>你適不適合？醫療團隊會陪你一起看</SectionLabel>
-              <p style={{ marginTop: -4, lineHeight: 1.75, fontSize: 14 }}>下面這幾件事，醫療團隊會和你一起確認。不是每個人現在都剛好適合，這很正常——<b>就算這次還不適合，繼續吃口服藥一樣能把病毒顧得很好，這一點都不是退而求其次。</b></p>
+              <SectionLabel>{tr("你適不適合？醫療團隊會陪你一起看", "Is it right for you? Your care team will go through it with you")}</SectionLabel>
+              <p style={{ marginTop: -4, lineHeight: 1.75, fontSize: 14 }}>{tr(<>下面這幾件事，醫療團隊會和你一起確認。不是每個人現在都剛好適合，這很正常——<b>就算這次還不適合，繼續吃口服藥一樣能把病毒顧得很好，這一點都不是退而求其次。</b></>, <>Your care team will check these points with you. Not everyone is a good fit right now, and that's completely normal — <b>even if it's not right for you this time, daily pills keep the virus under control just as well. That is not a second-best option.</b></>)}</p>
               <div style={{ marginTop: 8 }}>
-                {ELIG.map(([t, why], i) => (
+                {ELIG.map(pick).map(({ t, why }, i) => (
                   <div key={i} style={{ display: "flex", gap: 10, padding: "11px 0", borderTop: i ? "1px solid rgba(30,77,69,.14)" : "none" }}>
                     <span style={{ color: "var(--primary)", marginTop: 2, flexShrink: 0 }}><IconCheck /></span>
                     <div><div style={{ fontWeight: 600, fontSize: 14 }}>{t}</div>{why && <div style={{ fontSize: 13, color: "var(--muted)", marginTop: 2, lineHeight: 1.55 }}>{why}</div>}</div>
@@ -577,13 +622,26 @@ function PatientFlow({ p, set, onSubmit, caseId, setCaseId }) {
                 ))}
               </div>
             </div>
-            <Collapse title="打針是什麼情況？之後要注意什麼？">
-              <b>打針的時候：</b>打在臀部肌肉，左右各一針，打完會請你留下來觀察 10–15 分鐘。目前國內做法是<b>從原本的口服藥直接換成針劑</b>，不需要先吃一段口服導入期，確認條件符合後就可以安排第一次注射。<br /><br />
-              <b>打完之後（這些都很正常）：</b>打針的地方痠、紅、腫或有硬塊都很常見，通常幾天就好；附近肌肉有點痠也別擔心。<br /><br />
-              <b style={{ color: "var(--accent)" }}>有幾件事想特別提醒你（都是為了讓針劑一直保護你）：</b><br />
-              ・每次打針最好在預定日「前後 7 天內」完成。<br />
-              ・如果快趕不上回診（出國、生病、臨時有事都可能發生），<b>早點告訴個管師就好</b>，需要的話會先用口服藥幫你銜接。<br />
-              ・如果之後決定不打了，記得<b>馬上接著吃口服藥</b>——針劑成分會在身體裡留存大約 12 個月，中間空著可能讓病毒有機會產生抗藥性。
+            <Collapse title={tr("打針是什麼情況？之後要注意什麼？", "What is the shot like? What should I watch for afterwards?")}>
+              {en ? (
+                <>
+                  <b>Getting the shot:</b> it goes into the buttock muscle, one on each side, and you'll be asked to stay 10–15 minutes afterwards so staff can check on you. In Taiwan, the current practice is to <b>switch directly from your current pills to the injection</b> — there's no oral lead-in period first. Once you're confirmed eligible, your first injection can be scheduled.<br /><br />
+                  <b>Afterwards (all normal):</b> soreness, redness, swelling or a lump where the shot was given is common and usually goes away in a few days. Some aching in the nearby muscles is nothing to worry about either.<br /><br />
+                  <b style={{ color: "var(--accent)" }}>A few important reminders (all to keep the injection protecting you):</b><br />
+                  ・Each shot should be given within 7 days before or after the scheduled date.<br />
+                  ・If you might miss a visit (travel abroad, illness, something unexpected — it happens), <b>just tell your case manager early</b>. If needed, pills can be used to bridge the gap.<br />
+                  ・If you later decide to stop the injections, <b>start pills right away</b> — the medicine stays in your body for about 12 months, and a gap without treatment could give the virus a chance to develop drug resistance.
+                </>
+              ) : (
+                <>
+                  <b>打針的時候：</b>打在臀部肌肉，左右各一針，打完會請你留下來觀察 10–15 分鐘。目前國內做法是<b>從原本的口服藥直接換成針劑</b>，不需要先吃一段口服導入期，確認條件符合後就可以安排第一次注射。<br /><br />
+                  <b>打完之後（這些都很正常）：</b>打針的地方痠、紅、腫或有硬塊都很常見，通常幾天就好；附近肌肉有點痠也別擔心。<br /><br />
+                  <b style={{ color: "var(--accent)" }}>有幾件事想特別提醒你（都是為了讓針劑一直保護你）：</b><br />
+                  ・每次打針最好在預定日「前後 7 天內」完成。<br />
+                  ・如果快趕不上回診（出國、生病、臨時有事都可能發生），<b>早點告訴個管師就好</b>，需要的話會先用口服藥幫你銜接。<br />
+                  ・如果之後決定不打了，記得<b>馬上接著吃口服藥</b>——針劑成分會在身體裡留存大約 12 個月，中間空著可能讓病毒有機會產生抗藥性。
+                </>
+              )}
             </Collapse>
           </div>
         )}
@@ -592,29 +650,33 @@ function PatientFlow({ p, set, onSubmit, caseId, setCaseId }) {
         {step === 2 && (
           <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
             <div style={card}>
-              <SectionLabel n="1">過去這個月，你大概多常漏吃藥？<Req /></SectionLabel>
-              <p style={sub}>再忙、再規律的人都會有忘記的時候。照實選就好，這裡不會評斷你。</p>
-              <Pills single options={FREQ_OPTS} values={p.missedFreq} onToggle={(k) => upd("missedFreq", k)} />
+              <SectionLabel n="1">{tr("過去這個月，你大概多常漏吃藥？", "In the past month, about how often did you miss a dose?")}<Req /></SectionLabel>
+              <p style={sub}>{tr("再忙、再規律的人都會有忘記的時候。照實選就好，這裡不會評斷你。", "Everyone forgets sometimes, however busy or organized they are. Just answer honestly — no one is judging you here.")}</p>
+              <Pills single options={FREQ_OPTS.map((o) => ({ key: o.key, label: tr(o.label, o.en) }))} values={p.missedFreq} onToggle={(k) => upd("missedFreq", k)} />
             </div>
             <div style={card}>
-              <SectionLabel n="2">通常是什麼原因呢？（可複選）</SectionLabel>
-              <p style={sub}>勾選符合你的就好，沒有對錯。</p>
-              <Pills options={Object.entries(REASONS).map(([key, label]) => ({ key, label }))} values={p.reasons} onToggle={(k) => toggle("reasons", k)} />
+              <SectionLabel n="2">{tr("通常是什麼原因呢？（可複選）", "What are the usual reasons? (choose all that apply)")}</SectionLabel>
+              <p style={sub}>{tr("勾選符合你的就好，沒有對錯。", "Pick whatever applies to you — there are no wrong answers.")}</p>
+              <Pills options={Object.entries(REASONS).map(([key, label]) => ({ key, label: tr(label, REASONS_EN[key]) }))} values={p.reasons} onToggle={(k) => toggle("reasons", k)} />
             </div>
             <div style={card}>
-              <SectionLabel n="3">這些感受，你有多常出現？<Req /></SectionLabel>
-              <p style={sub}>這些心情都很真實，也有很多人經歷過。四題都請選一個分數。</p>
+              <SectionLabel n="3">{tr("這些感受，你有多常出現？", "How often do you have these feelings?")}<Req /></SectionLabel>
+              <p style={sub}>{tr("這些心情都很真實，也有很多人經歷過。四題都請選一個分數。", "These feelings are real, and many people have them. Please choose a score for all four.")}</p>
               <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
-                <div><div style={{ marginBottom: 8, fontSize: 14 }}>擔心被家人、同事或伴侶看到我在吃藥</div><Scale value={p.fearSeen} onChange={(v) => upd("fearSeen", v)} low="幾乎不會" high="很常這樣" /></div>
-                <div><div style={{ marginBottom: 8, fontSize: 14 }}>要把藥藏起來、找地方放，讓我有壓力</div><Scale value={p.hidingStress} onChange={(v) => upd("hidingStress", v)} low="幾乎不會" high="很常這樣" /></div>
-                <div><div style={{ marginBottom: 8, fontSize: 14 }}>每天吃藥，常讓我想起自己的狀況</div><Scale value={p.dailyReminder} onChange={(v) => upd("dailyReminder", v)} low="幾乎不會" high="很常這樣" /></div>
-                <div><div style={{ marginBottom: 8, fontSize: 14 }}>擔心自己漏藥、或是不確定自己有沒有吃</div><Scale value={p.missWorry} onChange={(v) => upd("missWorry", v)} low="幾乎不會" high="很常這樣" /></div>
+                {[
+                  ["fearSeen", "擔心被家人、同事或伴侶看到我在吃藥", "I worry that family, coworkers or a partner will see me taking my pills"],
+                  ["hidingStress", "要把藥藏起來、找地方放，讓我有壓力", "Having to hide my pills or find a place to keep them stresses me out"],
+                  ["dailyReminder", "每天吃藥，常讓我想起自己的狀況", "Taking pills every day often reminds me of my condition"],
+                  ["missWorry", "擔心自己漏藥、或是不確定自己有沒有吃", "I worry about missing a dose, or I'm not sure whether I took it"],
+                ].map(([k, zh, enText]) => (
+                  <div key={k}><div style={{ marginBottom: 8, fontSize: 14 }}>{tr(zh, enText)}</div><Scale value={p[k]} onChange={(v) => upd(k, v)} low={tr("幾乎不會", "Almost never")} high={tr("很常這樣", "Very often")} /></div>
+                ))}
               </div>
             </div>
             <div style={card}>
-              <SectionLabel n="4">每天吃藥，有影響到生活的哪些部分嗎？（可複選）</SectionLabel>
-              <Pills options={Object.entries(LIFE).map(([key, label]) => ({ key, label }))} values={p.lifeImpact} onToggle={(k) => toggle("lifeImpact", k)} />
-              <textarea value={p.difficultyNote} onChange={(e) => upd("difficultyNote", e.target.value)} placeholder="有想多說的，都可以寫在這裡（選填）" style={{ marginTop: 14, width: "100%", minHeight: 70, padding: 12, borderRadius: 10, border: "1px solid var(--line)", fontFamily: "var(--body)", fontSize: 14, resize: "vertical", color: "var(--ink)", background: "var(--surface)", boxSizing: "border-box" }} />
+              <SectionLabel n="4">{tr("每天吃藥，有影響到生活的哪些部分嗎？（可複選）", "Has taking pills every day affected any part of your life? (choose all that apply)")}</SectionLabel>
+              <Pills options={Object.entries(LIFE).map(([key, label]) => ({ key, label: tr(label, LIFE_EN[key]) }))} values={p.lifeImpact} onToggle={(k) => toggle("lifeImpact", k)} />
+              <textarea value={p.difficultyNote} onChange={(e) => upd("difficultyNote", e.target.value)} placeholder={tr("有想多說的，都可以寫在這裡（選填）", "Anything else you'd like to share? Write it here (optional)")} style={{ marginTop: 14, width: "100%", minHeight: 70, padding: 12, borderRadius: 10, border: "1px solid var(--line)", fontFamily: "var(--body)", fontSize: 14, resize: "vertical", color: "var(--ink)", background: "var(--surface)", boxSizing: "border-box" }} />
             </div>
           </div>
         )}
@@ -622,28 +684,28 @@ function PatientFlow({ p, set, onSubmit, caseId, setCaseId }) {
         {/* 3 你的想法 */}
         {step === 3 && (
           <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-            <div style={card}><SectionLabel n="5">你對長效針劑了解多少呢？<Req /></SectionLabel><Scale value={p.knowledge} onChange={(v) => upd("knowledge", v)} low="幾乎不了解" high="很清楚" /></div>
-            <div style={card}><SectionLabel n="6">關於長效針劑，有沒有什麼最想問、或最在意的？</SectionLabel><textarea value={p.concern} onChange={(e) => upd("concern", e.target.value)} placeholder="例如：會不會痛？要請假回診嗎？會不會有人發現？（選填）" style={{ width: "100%", minHeight: 70, padding: 12, borderRadius: 10, border: "1px solid var(--line)", fontFamily: "var(--body)", fontSize: 14, resize: "vertical", color: "var(--ink)", background: "var(--surface)", boxSizing: "border-box" }} /></div>
+            <div style={card}><SectionLabel n="5">{tr("你對長效針劑了解多少呢？", "How much do you know about the long-acting injection?")}<Req /></SectionLabel><Scale value={p.knowledge} onChange={(v) => upd("knowledge", v)} low={tr("幾乎不了解", "Very little")} high={tr("很清楚", "A lot")} /></div>
+            <div style={card}><SectionLabel n="6">{tr("關於長效針劑，有沒有什麼最想問、或最在意的？", "Is there anything you most want to ask, or worry about, regarding the injection?")}</SectionLabel><textarea value={p.concern} onChange={(e) => upd("concern", e.target.value)} placeholder={tr("例如：會不會痛？要請假回診嗎？會不會有人發現？（選填）", "For example: Will it hurt? Will I need time off for visits? Will anyone find out? (optional)")} style={{ width: "100%", minHeight: 70, padding: 12, borderRadius: 10, border: "1px solid var(--line)", fontFamily: "var(--body)", fontSize: 14, resize: "vertical", color: "var(--ink)", background: "var(--surface)", boxSizing: "border-box" }} /></div>
           </div>
         )}
 
         {/* 4 你的偏好 */}
         {step === 4 && (
           <div style={card}>
-            <SectionLabel n="7">這些對你來說，感覺如何？<Req /></SectionLabel>
-            <p style={sub}>沒有標準答案，這只是幫你和醫師更看清楚你心裡的想法。每一題都請選一個分數。</p>
+            <SectionLabel n="7">{tr("這些對你來說，感覺如何？", "How do you feel about each of these?")}<Req /></SectionLabel>
+            <p style={sub}>{tr("沒有標準答案，這只是幫你和醫師更看清楚你心裡的想法。每一題都請選一個分數。", "There are no right answers — this just helps you and your doctor see what matters to you. Please choose a score for each one.")}</p>
             <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
               {PREF_DIMS.map((d) => (
                 <div key={d.key}>
-                  <div style={{ marginBottom: 8, fontSize: 14 }}>{d.label}{!p[d.key] && <span style={{ color: "var(--red)", marginLeft: 4 }}>*</span>}</div>
-                  <Scale value={p[d.key]} onChange={(v) => upd(d.key, v)} low={d.low} high={d.high} />
+                  <div style={{ marginBottom: 8, fontSize: 14 }}>{pick(d).label}{!p[d.key] && <span style={{ color: "var(--red)", marginLeft: 4 }}>*</span>}</div>
+                  <Scale value={p[d.key]} onChange={(v) => upd(d.key, v)} low={pick(d).low} high={pick(d).high} />
                 </div>
               ))}
             </div>
             <div style={{ marginTop: 22, paddingTop: 18, borderTop: "1px solid var(--line)" }}>
-              <div style={{ fontSize: 13, color: "var(--muted)", marginBottom: 10 }}>從你目前的回答看起來，你的心比較偏向：</div>
+              <div style={{ fontSize: 13, color: "var(--muted)", marginBottom: 10 }}>{tr("從你目前的回答看起來，你的心比較偏向：", "Based on your answers so far, you're leaning towards:")}</div>
               <PrefSpectrum lean={prefLean(p)} />
-              <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 10, lineHeight: 1.6 }}>這只是反映你現在的想法，不是建議、也不是結論——要不要換，最後由你和醫療團隊一起決定。</div>
+              <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 10, lineHeight: 1.6 }}>{tr("這只是反映你現在的想法，不是建議、也不是結論——要不要換，最後由你和醫療團隊一起決定。", "This only reflects how you feel right now — it's not a recommendation or a conclusion. Whether to switch is up to you and your care team, together.")}</div>
             </div>
           </div>
         )}
@@ -651,11 +713,11 @@ function PatientFlow({ p, set, onSubmit, caseId, setCaseId }) {
         {/* 5 完成 */}
         {step === 5 && (
           <div style={card}>
-            <SectionLabel n="9">準備好了嗎？</SectionLabel>
-            <p style={{ color: "var(--muted)", lineHeight: 1.75, marginTop: -4 }}>送出後，你填的內容會給個管師參考，幫忙一起討論。這份小工具<b style={{ color: "var(--ink)" }}>不會幫你決定</b>，也<b style={{ color: "var(--ink)" }}>不會記下你的姓名或任何身分資料</b>——最後怎麼選，永遠是你和醫療團隊一起決定。</p>
+            <SectionLabel n="9">{tr("準備好了嗎？", "Ready to send?")}</SectionLabel>
+            <p style={{ color: "var(--muted)", lineHeight: 1.75, marginTop: -4 }}>{tr(<>送出後，你填的內容會給個管師參考，幫忙一起討論。這份小工具<b style={{ color: "var(--ink)" }}>不會幫你決定</b>，也<b style={{ color: "var(--ink)" }}>不會記下你的姓名或任何身分資料</b>——最後怎麼選，永遠是你和醫療團隊一起決定。</>, <>Once you send it, your answers go to your case manager to help with your discussion. This tool <b style={{ color: "var(--ink)" }}>won't make the decision for you</b>, and it <b style={{ color: "var(--ink)" }}>doesn't record your name or anything that identifies you</b>. The final choice is always made by you and your care team together.</>)}</p>
             <label style={{ display: "flex", gap: 10, alignItems: "flex-start", marginTop: 16, cursor: "pointer", padding: 14, borderRadius: 10, background: "var(--primary-soft)" }}>
               <input type="checkbox" checked={p.consent} onChange={(e) => upd("consent", e.target.checked)} style={{ marginTop: 3, width: 17, height: 17, accentColor: "var(--primary)" }} />
-              <span style={{ fontSize: 14, color: "var(--ink)", lineHeight: 1.6 }}>我了解上面的說明，也願意把我的填答提供給個管師，作為一起討論之用。</span>
+              <span style={{ fontSize: 14, color: "var(--ink)", lineHeight: 1.6 }}>{tr("我了解上面的說明，也願意把我的填答提供給個管師，作為一起討論之用。", "I understand the above and agree to share my answers with my case manager for our discussion.")}</span>
             </label>
           </div>
         )}
@@ -663,15 +725,15 @@ function PatientFlow({ p, set, onSubmit, caseId, setCaseId }) {
 
       {showHint && !canProceed && (
         <div style={{ marginTop: 16, padding: "11px 14px", borderRadius: 10, background: "#FBE5DF", color: "var(--red)", fontSize: 13.5, fontWeight: 600 }}>
-          有 <span style={{ textDecoration: "underline" }}>標示紅色 *</span> 的題目還沒填完，請補上後再進到下一步。
+          {tr(<>有 <span style={{ textDecoration: "underline" }}>標示紅色 *</span> 的題目還沒填完，請補上後再進到下一步。</>, <>Some questions marked with a <span style={{ textDecoration: "underline" }}>red *</span> aren't answered yet. Please answer them to continue.</>)}
         </div>
       )}
       <div style={{ display: "flex", justifyContent: "space-between", marginTop: 22, gap: 12 }}>
-        <button disabled={step === 0} onClick={goPrev} className="sbtn" style={{ padding: "11px 18px", borderRadius: 10, border: "1px solid var(--line)", background: "var(--surface)", color: step === 0 ? "var(--line)" : "var(--ink)", cursor: step === 0 ? "default" : "pointer", fontWeight: 600 }}>上一步</button>
+        <button disabled={step === 0} onClick={goPrev} className="sbtn" style={{ padding: "11px 18px", borderRadius: 10, border: "1px solid var(--line)", background: "var(--surface)", color: step === 0 ? "var(--line)" : "var(--ink)", cursor: step === 0 ? "default" : "pointer", fontWeight: 600 }}>{tr("上一步", "Back")}</button>
         {step < 5 ? (
-          <button onClick={goNext} className="sbtn" style={{ display: "flex", alignItems: "center", gap: 8, padding: "11px 20px", borderRadius: 10, border: "none", background: canProceed ? "var(--primary)" : "var(--line)", color: "#fff", cursor: canProceed ? "pointer" : "not-allowed", fontWeight: 600 }}>下一步 <IconArrow /></button>
+          <button onClick={goNext} className="sbtn" style={{ display: "flex", alignItems: "center", gap: 8, padding: "11px 20px", borderRadius: 10, border: "none", background: canProceed ? "var(--primary)" : "var(--line)", color: "#fff", cursor: canProceed ? "pointer" : "not-allowed", fontWeight: 600 }}>{tr("下一步", "Next")} <IconArrow /></button>
         ) : (
-          <button onClick={onSubmit} disabled={!p.consent} className="sbtn" style={{ display: "flex", alignItems: "center", gap: 8, padding: "11px 22px", borderRadius: 10, border: "none", background: p.consent ? "var(--accent)" : "var(--line)", color: "#fff", cursor: p.consent ? "pointer" : "default", fontWeight: 600 }}>送出給個管師 <IconArrow /></button>
+          <button onClick={onSubmit} disabled={!p.consent} className="sbtn" style={{ display: "flex", alignItems: "center", gap: 8, padding: "11px 22px", borderRadius: 10, border: "none", background: p.consent ? "var(--accent)" : "var(--line)", color: "#fff", cursor: p.consent ? "pointer" : "default", fontWeight: 600 }}>{tr("送出給個管師", "Send to my case manager")} <IconArrow /></button>
         )}
       </div>
     </div>
@@ -772,7 +834,10 @@ function ManagerDashboard({ p, m, set, setP, caseId, setCaseId }) {
           <div style={{ ...card, marginBottom: 16 }}>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
               <SectionLabel>個案自評儀表板</SectionLabel>
-              <span style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, fontWeight: 600, padding: "3px 10px", borderRadius: 999, background: "var(--bg)", color: "var(--muted)" }}><Dot level={overall} />困擾整體</span>
+              <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap", justifyContent: "flex-end" }}>
+                {p.lang === "en" && <span style={{ fontSize: 12, fontWeight: 600, padding: "3px 10px", borderRadius: 999, background: "var(--primary-soft)", color: "var(--primary)" }}>英文版填答</span>}
+                <span style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, fontWeight: 600, padding: "3px 10px", borderRadius: 999, background: "var(--bg)", color: "var(--muted)" }}><Dot level={overall} />困擾整體</span>
+              </div>
             </div>
             {row("漏服頻率", FREQ[p.missedFreq] || "未填", freqSev(p.missedFreq))}
             {row("漏服原因", p.reasons.length ? p.reasons.map((r) => REASONS[r]).join("、") : "—")}
@@ -936,16 +1001,29 @@ export default function SDMTool() {
   const [manager, setManager] = useState(initManager);
   const [caseId, setCaseId] = useState("");
   const [submitError, setSubmitError] = useState("");
+  // 語言：網址帶 ?lang=en 直接開英文版（可做成 QR code 給外籍個案）；個管師端固定中文
+  const [lang, setLang] = useState(() => (new URLSearchParams(window.location.search).get("lang") === "en" ? "en" : "zh"));
+  const en = mode === "patient" && lang === "en";
+  const tr = (zh, enText) => (en ? enText : zh);
+
+  useEffect(() => {
+    document.documentElement.lang = en ? "en" : "zh-Hant";
+    document.title = en ? "Long-Acting Injection Decision Aid" : "長效針劑共同決策輔助工具";
+    const u = new URL(window.location.href);
+    if (lang === "en") u.searchParams.set("lang", "en"); else u.searchParams.delete("lang");
+    window.history.replaceState(null, "", u);
+  }, [en, lang]);
 
   const handlePatientSubmit = async () => {
     setSubmitError("");
     const id = caseId || makeCaseId();
     try {
-      await submitPatientResponse(id, { ...patient, prefLean: prefLean(patient) });
+      // lang 記錄送出當下使用的語言，個管師端據此自動顯示「英文版填答」
+      await submitPatientResponse(id, { ...patient, lang, prefLean: prefLean(patient) });
       setCaseId(id);
-      setPatient({ ...patient, submitted: true });
+      setPatient({ ...patient, lang, submitted: true });
     } catch (e) {
-      setSubmitError(e.message || "送出失敗，請稍後再試");
+      setSubmitError(e.message || tr("送出失敗，請稍後再試", "Couldn't send. Please try again later."));
     }
   };
 
@@ -976,32 +1054,48 @@ export default function SDMTool() {
       <div style={{ position: "sticky", top: 0, zIndex: 10, background: "rgba(244,241,234,.88)", backdropFilter: "blur(8px)", borderBottom: "1px solid var(--line)" }}>
         <div style={{ maxWidth: 880, margin: "0 auto", padding: "14px 20px", display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 12 }}>
           <div>
-            <div style={{ fontFamily: "var(--display)", fontSize: 18, fontWeight: 600, lineHeight: 1.2 }}>長效針劑共同決策輔助</div>
-            <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 2 }}>口服 → 長效針劑（CAB/RPV LA）｜ SDM</div>
+            <div style={{ fontFamily: "var(--display)", fontSize: 18, fontWeight: 600, lineHeight: 1.2 }}>{tr("長效針劑共同決策輔助", "Long-Acting Injection Decision Aid")}</div>
+            <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 2 }}>{tr("口服 → 長效針劑（CAB/RPV LA）｜ SDM", "Daily pills → long-acting injection (CAB/RPV LA) | SDM")}</div>
           </div>
-          <div style={{ display: "flex", background: "var(--surface)", border: "1px solid var(--line)", borderRadius: 999, padding: 3 }}>
-            {[["patient", "個案端"], ["manager", "個管師端"]].map(([k, label]) => (
-              <button key={k} onClick={() => setMode(k)} className="sbtn" style={{ padding: "7px 18px", borderRadius: 999, border: "none", cursor: "pointer", fontSize: 14, fontWeight: 600, background: mode === k ? "var(--primary)" : "transparent", color: mode === k ? "#fff" : "var(--muted)", transition: "all .2s" }}>{label}</button>
-            ))}
+          <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+            {mode === "patient" && (
+              <button onClick={() => setLang(lang === "en" ? "zh" : "en")} lang={lang === "en" ? "zh-Hant" : "en"} className="sbtn" style={{ padding: "9px 14px", borderRadius: 999, border: "1px solid var(--line)", background: "var(--surface)", color: "var(--primary)", cursor: "pointer", fontSize: 13, fontWeight: 600 }}>{lang === "en" ? "中文" : "English"}</button>
+            )}
+            <div style={{ display: "flex", background: "var(--surface)", border: "1px solid var(--line)", borderRadius: 999, padding: 3 }}>
+              {[["patient", tr("個案端", "Patient")], ["manager", tr("個管師端", "Case manager")]].map(([k, label]) => (
+                <button key={k} onClick={() => setMode(k)} className="sbtn" style={{ padding: "7px 18px", borderRadius: 999, border: "none", cursor: "pointer", fontSize: 14, fontWeight: 600, background: mode === k ? "var(--primary)" : "transparent", color: mode === k ? "#fff" : "var(--muted)", transition: "all .2s" }}>{label}</button>
+              ))}
+            </div>
           </div>
         </div>
       </div>
 
-      <div style={{ maxWidth: 880, margin: "0 auto", padding: "26px 20px 0" }}>
-        {mode === "patient" ? (
-          <>
-            <PatientFlow p={patient} set={setPatient} onSubmit={handlePatientSubmit} caseId={caseId} setCaseId={setCaseId} />
-            {submitError && <div style={{ marginTop: 14, padding: 12, borderRadius: 10, background: "#FBE5DF", color: "var(--red)", fontSize: 13.5 }}>送出時發生問題：{submitError}</div>}
-          </>
-        ) : (
-          <ManagerDashboard p={patient} m={manager} set={setManager} setP={setPatient} caseId={caseId} setCaseId={setCaseId} />
-        )}
-      </div>
+      <LangCtx.Provider value={en ? "en" : "zh"}>
+        <div style={{ maxWidth: 880, margin: "0 auto", padding: "26px 20px 0" }}>
+          {mode === "patient" ? (
+            <>
+              <PatientFlow p={patient} set={setPatient} onSubmit={handlePatientSubmit} caseId={caseId} setCaseId={setCaseId} />
+              {submitError && <div style={{ marginTop: 14, padding: 12, borderRadius: 10, background: "#FBE5DF", color: "var(--red)", fontSize: 13.5 }}>{tr("送出時發生問題：", "Something went wrong while sending: ")}{submitError}</div>}
+            </>
+          ) : (
+            <ManagerDashboard p={patient} m={manager} set={setManager} setP={setPatient} caseId={caseId} setCaseId={setCaseId} />
+          )}
+        </div>
+      </LangCtx.Provider>
 
       <div style={{ maxWidth: 880, margin: "0 auto", padding: "28px 20px 0" }}>
         <div style={{ borderTop: "1px solid var(--line)", paddingTop: 18, fontSize: 12, color: "var(--muted)", lineHeight: 1.75 }}>
-          <b style={{ color: "var(--ink)" }}>資料依據</b>：FDA 仿單與 ATLAS、FLAIR、ATLAS-2M 第三期臨床試驗；台灣現行〈抗人類免疫缺乏病毒藥品處方使用規範〉（113/4 版，長效針劑需經 CDC 事前審查、藥費由 CDC 支應）。數字來自臨床研究，實際情形可能因個人狀況與院所而異。<br />
-          本工具與台灣愛滋病護理學會（TANA）臨床人員共同發展｜不收集可識別個資｜版本 v3.0｜最後更新：2026 年 9 月 8 日。
+          {en ? (
+            <>
+              <b style={{ color: "var(--ink)" }}>Sources</b>: FDA prescribing information and the phase 3 ATLAS, FLAIR and ATLAS-2M trials; Taiwan's current guidelines for prescribing HIV medicines (April 2024 edition — the long-acting injection requires prior review by Taiwan CDC, which also covers the medicine cost). Numbers come from clinical studies; your own experience may vary with your health and your hospital.<br />
+              Developed with clinical staff of the Taiwan AIDS Nurses Association (TANA) | No identifiable personal data collected | Version 3.1 | Last updated: September 23, 2026
+            </>
+          ) : (
+            <>
+              <b style={{ color: "var(--ink)" }}>資料依據</b>：FDA 仿單與 ATLAS、FLAIR、ATLAS-2M 第三期臨床試驗；台灣現行〈抗人類免疫缺乏病毒藥品處方使用規範〉（113/4 版，長效針劑需經 CDC 事前審查、藥費由 CDC 支應）。數字來自臨床研究，實際情形可能因個人狀況與院所而異。<br />
+              本工具與台灣愛滋病護理學會（TANA）臨床人員共同發展｜不收集可識別個資｜版本 v3.1｜最後更新：2026 年 9 月 23 日。
+            </>
+          )}
         </div>
       </div>
     </div>
