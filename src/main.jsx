@@ -16,8 +16,16 @@ function SetupNotice() {
         <li>填入你 Firebase 專案的網頁應用程式設定（Firebase 主控台 → 專案設定 → 一般 → 你的應用程式）。</li>
         <li>重新執行 <span style={code}>npm run dev</span>。</li>
       </ol>
-      <p>缺少的設定：{missingFirebaseKeys.map((k) => <span key={k} style={{ ...code, marginRight: 6 }}>{k}</span>)}</p>
-      <p>完整步驟見 README.md。</p>
+      <hr style={{ border: 0, borderTop: "1px solid #e6d9bf", margin: "20px 0" }} />
+      <h2 lang="en">Firebase is not set up yet</h2>
+      <p lang="en">This tool needs your own Firebase project to save responses.</p>
+      <ol lang="en">
+        <li>Copy <span style={code}>.env.example</span> to <span style={code}>.env.local</span>.</li>
+        <li>Fill in your Firebase web app settings (Firebase console → Project settings → General → Your apps).</li>
+        <li>Run <span style={code}>npm run dev</span> again.</li>
+      </ol>
+      <p>缺少的設定 / Missing settings：{missingFirebaseKeys.map((k) => <span key={k} style={{ ...code, marginRight: 6 }}>{k}</span>)}</p>
+      <p>完整步驟見 README.md／Full steps: README.en.md</p>
     </div>
   );
 }
