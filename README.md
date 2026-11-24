@@ -8,7 +8,7 @@ clone 下來的程式**不會連到原作者的資料庫**，你需要建立自�
 
 ### 1. 安裝
 
-需要 [Node.js](https://nodejs.org/) 18 以上。
+需要 [Node.js](https://nodejs.org/) 20.19 或 22.12 以上。
 
 ```bash
 git clone https://github.com/tommy880422/SDM-tool.git
