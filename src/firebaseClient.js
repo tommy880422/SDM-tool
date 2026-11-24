@@ -11,18 +11,24 @@ import {
   serverTimestamp,
 } from "firebase/firestore";
 
+// Firebase 設定從環境變數讀取（Vite 只會讀 VITE_ 開頭的變數）。
+// 把 .env.example 複製成 .env.local，填入你自己 Firebase 專案的值；設定方式見 README。
 const firebaseConfig = {
-  apiKey: "AIzaSyD9IntcPfSGUFY7IVZQ1BsQ78Go885TdRE",
-  authDomain: "sdm-tool-14dd1.firebaseapp.com",
-  projectId: "sdm-tool-14dd1",
-  storageBucket: "sdm-tool-14dd1.firebasestorage.app",
-  messagingSenderId: "440292486617",
-  appId: "1:440292486617:web:9dc49c24f72f86ab6abdc8",
-  measurementId: "G-GKKBKH6BKR",
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
+  appId: import.meta.env.VITE_FIREBASE_APP_ID,
+  measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID,
 };
 
-const app = initializeApp(firebaseConfig);
-export const db = getFirestore(app);
+// 少了這三項就無法連到 Firestore；main.jsx 會改顯示設定說明。
+const REQUIRED_KEYS = ["apiKey", "projectId", "appId"];
+export const missingFirebaseKeys = REQUIRED_KEYS.filter((k) => !firebaseConfig[k]);
+export const firebaseConfigured = missingFirebaseKeys.length === 0;
+
+export const db = firebaseConfigured ? getFirestore(initializeApp(firebaseConfig)) : null;
 
 /* ── caseId 產生器（6 碼，去掉容易混淆的 0/O/1/I/L） ───────── */
 const ALPHABET = "23456789ABCDEFGHJKMNPQRSTUVWXYZ";
