@@ -25,7 +25,7 @@ function SetupNotice() {
         <li>Run <span style={code}>npm run dev</span> again.</li>
       </ol>
       <p>缺少的設定 / Missing settings：{missingFirebaseKeys.map((k) => <span key={k} style={{ ...code, marginRight: 6 }}>{k}</span>)}</p>
-      <p>完整步驟見 README.md／Full steps: README.en.md</p>
+      <p>完整步驟見 README.md／Full steps: README.md (English section)</p>
     </div>
   );
 }
