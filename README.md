@@ -38,25 +38,33 @@ cp .env.example .env.local
 
 把 `firebaseConfig` 裡的值依序填進 `.env.local`（`apiKey` → `VITE_FIREBASE_API_KEY`，依此類推）。`.env.local` 不會被 git 追蹤。
 
-#### 4. 本機執行
+#### 4. 部署資料庫規則（必要）
 
-```bash
-npm run dev
-```
-
-打開終端機顯示的網址（通常是 http://localhost:5173）。若畫面顯示「尚未設定 Firebase」，代表 `.env.local` 沒有填好。
-
-#### 5. 部署資料庫規則與網站（選用）
+新建立的 Firestore 預設會擋掉所有讀寫，要先把本專案的 `firestore.rules` 部署上去，問卷才能儲存與讀取。
 
 ```bash
 npm install -g firebase-tools
 firebase login
 firebase use --add        # 選你自己的專案
-npm run build
-firebase deploy
+firebase deploy --only firestore:rules
 ```
 
 `firebase use --add` 會把你的專案設為預設；`.firebaserc` 裡原本的專案是原作者的，你沒有權限部署到那裡。
+
+#### 5. 本機執行
+
+```bash
+npm run dev
+```
+
+打開終端機顯示的網址（通常是 http://localhost:5173）。若畫面顯示「尚未設定 Firebase」，代表 `.env.local` 沒有填好；若送出問卷時失敗，請確認第 4 步已完成。
+
+#### 6. 部署網站（選用）
+
+```bash
+npm run build
+firebase deploy --only hosting
+```
 
 ### 資料安全注意事項
 
@@ -98,25 +106,33 @@ cp .env.example .env.local
 
 Copy each value from `firebaseConfig` into `.env.local` (`apiKey` → `VITE_FIREBASE_API_KEY`, and so on). `.env.local` is not tracked by git.
 
-#### 4. Run locally
+#### 4. Deploy the database rules (required)
 
-```bash
-npm run dev
-```
-
-Open the URL shown in the terminal (usually http://localhost:5173). If the page says the Firebase settings are missing, check `.env.local`.
-
-#### 5. Deploy the database rules and website (optional)
+A new Firestore database blocks all reads and writes by default. Deploy this project's `firestore.rules` so responses can be saved and loaded.
 
 ```bash
 npm install -g firebase-tools
 firebase login
 firebase use --add        # choose your own project
-npm run build
-firebase deploy
+firebase deploy --only firestore:rules
 ```
 
 `firebase use --add` sets your project as the default. The project listed in `.firebaserc` belongs to the original author, and you cannot deploy to it.
+
+#### 5. Run locally
+
+```bash
+npm run dev
+```
+
+Open the URL shown in the terminal (usually http://localhost:5173). If the page says the Firebase settings are missing, check `.env.local`. If submitting fails, make sure step 4 is done.
+
+#### 6. Deploy the website (optional)
+
+```bash
+npm run build
+firebase deploy --only hosting
+```
 
 ### Data security
 
